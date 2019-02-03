@@ -1,3 +1,4 @@
 (executable
  (name main)
- (public_name mantis2github))
+ (public_name mantis2github)
+ (libraries unix mysql yojson))
