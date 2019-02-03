@@ -1,0 +1,99 @@
+# This file contains the mapping between Mantis user names
+# (which apparently can contain spaces) and github usernames.
+#
+# The first column is the Mantis username, follows OCaml string format.
+# The second column is the corresponding GH username.
+
+"administrator"               camelus
+"xleroy"                      xavierleroy
+"remy"                        diremy
+"doligez"                     damiendoligez
+"garrigue"                    garrigue
+"mottl"                       mmottl
+"Jean-Marc Eber"              jmeber
+"Jean-Christophe Filliatre"   backtracking
+"frisch"                      alainfrisch
+"berke"                       berke
+"arthur_chargueraud"          charguer
+"weis"                        pierreweis
+"sumii"                       esumii
+"mauny"                       mauny
+"Martin Jambon"               mjambon
+"Christophe Troestler"        Chris00
+"yminsky"                     yminsky
+"dbuenzli"                    dbuenzli
+"avsm"                        avsm
+"jyh"                         jyh
+"dra"                         dra27
+"fpottier"                    fpottier
+"hcarty"                      hcarty
+"maranget"                    maranget
+"Sebastien_Hinderer"          shindere
+"yallop"                      yallop
+"jmeber"                      jmeber
+"johnwhitington"              johnwhitington
+"kerneis"                     kerneis
+"djs55"                       djs55
+"jjb"                         jberdine
+"adamc"                       achlipala
+"chambart"                    chambart
+"xclerc"                      xclerc
+"Yves Bertot"                 ybertot
+"Ashish_Agarwal"              agarwal
+"vouillon"                    vouillon
+"bobot"                       bobot
+"glondu"                      glondu
+"shinwell"                    mshinwell
+"ygrek"                       ygrek
+"edwin"                       edwintorok
+"Etienne Millon"              emillon
+"rixed"                       rixed
+"lefessan"                    lefessan
+"sbriais"                     sbriais
+"protz"                       protz
+"samoht"                      samoht
+"lpw25"                       lpw25
+"gasche"                      gasche
+"sliquister"                  sliquister
+"rdicosmo"                    rdicosmo
+"berenger"                    UnixJunkie
+"hongboz"                     bobzhang
+"jacques-henri.jourdan"       jhjourdan
+"ppedrot"                     ppedrot
+"jpdeplaix"                   kit-ty-kate
+"thomasblanc"                 thomasblanc
+"bvaugon"                     bvaugon
+"rgrinberg"                   rgrinberg
+"vbmithr"                     vbmithr
+"vbrankov"                    vbrankov
+"def"                         let-def
+"Simon.cruanes"               c-cube
+"ivg"                         ivg
+"talex"                       talex5
+"drup"                        Drup
+"AltGr"                       AltGr
+"stedolan"                    stedolan
+"trefis"                      trefis
+"whitequark"                  whitequark
+"hhugo"                       hhugo
+"gfxmonk"                     timbertson
+"damien"                      damiendoligez
+"tom.j.ridge"                 tomjridge
+"seliopou"                    seliopou
+"shayne_fletcher"             shayne-fletcher
+"nojb"                        nojb
+"ybarnoy"                     bluddy
+"berke.durak"                 berke
+"dinosaure"                   dinosaure
+"nevor"                       Nevor
+"ggole"                       gsg
+"bcpierce"                    bcpierce00
+"michipili"                   michipili
+"c-cube"                      c-cube
+"octachron"                   Octachron
+"dobenour"                    DemiMarie
+"thierry.martinez"            thierry-martinez
+"keleshev"                    keleshev
+"shindere"                    shindere
+"nojebar"                     nojb
+"Armael"                      Armael

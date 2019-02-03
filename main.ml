@@ -1,36 +1,39 @@
 module List = ListLabels
 
-let omap x ~f = function
-  | Some x -> f x
-  | None -> x
+let ostr = function
+  | Some x -> `String x
+  | None -> `Null
 
 let hashtbl_of_list l =
   let h = Hashtbl.create (List.length l) in
   List.iter ~f:(fun (id, x) -> Hashtbl.add h id x) l;
   h
 
-module User = struct
-  type t =
-    {
-      user_name: string;
-      real_name: string;
-      email: string;
-    }
-
-  let to_json {user_name; real_name; email} =
-    let module J = Yojson.Basic in
-    `Assoc
-      [
-        "user_name", `String user_name;
-        "real_name", `String real_name;
-        "email", `String email;
-      ]
-end
+let user_map =
+  let h = Hashtbl.create 17 in
+  let ic = open_in "user_map.txt" in
+  let rec loop () =
+    match String.trim (input_line ic) with
+    | s when s = "" || s.[0] = '#' ->
+        loop ()
+    | s ->
+        let s1, s2 =
+          try
+            Scanf.sscanf s "%S %s%!" (fun s1 s2 -> s1, s2)
+          with _ ->
+            failwith (Printf.sprintf "Error while parsing users map: %S" s)
+        in
+        Hashtbl.add h s1 s2;
+        loop ()
+    | exception End_of_file ->
+        h
+  in
+  loop ()
 
 module Note = struct
   type t =
     {
-      reporter: User.t option;
+      reporter: string option;
       text: string;
       last_modified: string;
       date_submitted: string;
@@ -40,7 +43,7 @@ module Note = struct
     let module J = Yojson.Basic in
     `Assoc
       [
-        "reporter", omap `Null ~f:User.to_json reporter;
+        "reporter", ostr reporter;
         "text", `String text;
         "last_modified", `String last_modified;
         "date_submitted", `String date_submitted;
@@ -56,8 +59,8 @@ module Issue = struct
       category: string;
       date_submitted: string;
       last_updated: string;
-      reporter: User.t option;
-      handler: User.t option;
+      reporter: string option;
+      handler: string option;
       description: string;
       steps_to_reproduce: string;
       additional_information: string;
@@ -91,8 +94,8 @@ module Issue = struct
         "category", `String category;
         "date_submitted", `String date_submitted;
         "last_updated", `String last_updated;
-        "reporter", omap `Null ~f:User.to_json reporter;
-        "handler", omap `Null ~f:User.to_json handler;
+        "reporter", ostr reporter;
+        "handler", ostr handler;
         "description", `String description;
         "steps_to_reproduce", `String steps_to_reproduce;
         "additional_information", `String additional_information;
@@ -148,13 +151,21 @@ let () =
   in
   let users =
     let f = function
-      | [|Some id; Some user_name; Some real_name; Some email|] ->
-          (int_of_string id, {User.user_name; real_name; email})
+      | [|Some id; Some user_name|] ->
+          let gh_user =
+            match Hashtbl.find_opt user_map user_name with
+            | Some s -> s
+            | None ->
+                Printf.eprintf "WARNING: user %S does not have a GH user associated to it\n%!"
+                  user_name;
+                user_name ^ "@Mantis"
+          in
+          int_of_string id, gh_user
       | _ ->
           failwith ""
     in
     let r =
-      exec dbd ~f "SELECT id, username, realname, email FROM mantis_user_table;"
+      exec dbd ~f "SELECT id, username FROM mantis_user_table;"
     in
     hashtbl_of_list r
   in
