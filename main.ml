@@ -193,7 +193,7 @@ let () =
     let r =
       exec dbd ~f "SELECT bug_id, reporter_id, bugnote_text_id, \
                    last_modified, date_submitted \
-                   FROM mantis_bugnote_table;"
+                   FROM mantis_bugnote_table ORDER BY date_submitted DESC;"
     in
     hashtbl_of_list r
   in
