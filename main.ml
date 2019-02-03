@@ -61,6 +61,7 @@ module Issue = struct
       description: string;
       steps_to_reproduce: string;
       additional_information: string;
+      target_version: string;
       notes: Note.t list;
     }
 
@@ -77,6 +78,7 @@ module Issue = struct
         description;
         steps_to_reproduce;
         additional_information;
+        target_version;
         notes;
       }
     =
@@ -94,6 +96,7 @@ module Issue = struct
         "description", `String description;
         "steps_to_reproduce", `String steps_to_reproduce;
         "additional_information", `String additional_information;
+        "target_version", `String target_version;
         "notes", `List (List.map ~f:Note.to_json notes);
       ]
 end
@@ -199,13 +202,13 @@ let () =
   in
   let query =
     "SELECT id, summary, priority, category_id, date_submitted, last_updated, \
-     reporter_id, handler_id, bug_text_id \
+     reporter_id, handler_id, bug_text_id, target_version \
      FROM mantis_bug_table ORDER BY id;"
   in
   let f = function
     | [|Some id; Some summary; Some priority; Some category_id;
         Some date_submitted; Some last_updated; Some reporter_id;
-        Some handler_id; Some bug_text_id|] ->
+        Some handler_id; Some bug_text_id; Some target_version|] ->
         let id = int_of_string id in
         let category = Hashtbl.find categories (int_of_string category_id) in
         let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
@@ -217,7 +220,8 @@ let () =
         { Issue.id; summary; priority; category;
           date_submitted = timestamp date_submitted;
           last_updated = timestamp last_updated; reporter; handler;
-          description; steps_to_reproduce; additional_information; notes }
+          description; steps_to_reproduce; additional_information; target_version;
+          notes }
     | _ ->
         failwith "unxpected"
   in
