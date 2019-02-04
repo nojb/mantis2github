@@ -7,6 +7,9 @@ https://caml.inria.fr/mantis to GH issues.
 
 - https://github.com/ygrek/ocaml-mysql (`opam install mysql`)
 - https://github.com/ocaml-community/yojson (`opam install yojson`)
+- https://erratique.ch/software/cmdliner (`opam install cmdliner`)
+
+- `dune` (`opam install dune`)
 - `unix` library
 
 ## Getting and building
