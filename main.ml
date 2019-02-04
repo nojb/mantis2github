@@ -30,6 +30,56 @@ let user_map =
   in
   loop ()
 
+module Curl = struct
+  let root = "https://api.github.com"
+  let owner = "ocaml"
+  let repo = "ocaml"
+
+  let subst = function
+    | "owner" -> owner
+    | "repo" -> repo
+    | s -> failwith (Printf.sprintf "Bad substitution: %s" s)
+
+  let url path =
+    let b = Buffer.create (String.length path) in
+    Buffer.add_string b root;
+    Buffer.add_char b '/';
+    Buffer.add_substitute b subst path;
+    Buffer.contents b
+
+  let request meth url =
+    let cmd = Printf.sprintf "curl -X %s %s" meth url in
+    let tmp = Filename.temp_file "curl" "out" in
+    assert (Sys.command (Printf.sprintf "%s > %s" cmd tmp) = 0);
+    let ic = open_in_bin tmp in
+    let s = really_input_string ic (in_channel_length ic) in
+    close_in ic;
+    Yojson.Basic.from_string s
+
+  let get_params = function
+    | [] -> ""
+    | l ->
+        "?" ^ String.concat "&" (List.map ~f:(fun (k, v) -> String.concat "=" [k; v]) l)
+
+  let get path params =
+    request "GET" (url path ^ get_params params)
+
+  let list_milestones () =
+    let open Yojson.Basic.Util in
+    let json = get "repos/${owner}/${repo}/milestones" ["state", "all"] in
+    let f json =
+      let title = json |> member "title" |> to_string in
+      let number = json |> member "number" |> to_int in
+      Some (title, number)
+    in
+    to_list json |> filter_map f
+end
+
+(*
+let () =
+  List.iter ~f:(fun (title, number) -> Printf.eprintf "%S (%d)\n" title number) (Curl.list_milestones ())
+*)
+
 module Status = struct
   type t =
     | New
