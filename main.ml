@@ -30,6 +30,40 @@ let user_map =
   in
   loop ()
 
+module Status = struct
+  type t =
+    | New
+    | Feedback
+    | Acknowledged
+    | Confirmed
+    | Assigned
+    | Resolved
+    | Closed
+
+  let of_int = function
+    | 10 -> New
+    | 20 -> Feedback
+    | 30 -> Acknowledged
+    | 40 -> Confirmed
+    | 50 -> Assigned
+    | 80 -> Resolved
+    | 90 -> Closed
+    | n -> failwith (Printf.sprintf "Unexpected status code: %d" n)
+
+  let to_string = function
+    | New -> "new"
+    | Feedback -> "feedback"
+    | Acknowledged -> "acknowledged"
+    | Confirmed -> "confirmed"
+    | Assigned -> "assigned"
+    | Resolved -> "resolved"
+    | Closed -> "closed"
+
+  let to_json st =
+    let module J = Yojson.Basic in
+    `String (to_string st)
+end
+
 module Note = struct
   type t =
     {
@@ -66,6 +100,7 @@ module Issue = struct
       additional_information: string;
       target_version: string;
       notes: Note.t list;
+      status: Status.t;
     }
 
   let to_json
@@ -83,6 +118,7 @@ module Issue = struct
         additional_information;
         target_version;
         notes;
+        status;
       }
     =
     let module J = Yojson.Basic in
@@ -101,6 +137,7 @@ module Issue = struct
         "additional_information", `String additional_information;
         "target_version", `String target_version;
         "notes", `List (List.map ~f:Note.to_json notes);
+        "status", Status.to_json status;
       ]
 end
 
@@ -199,13 +236,14 @@ let main dbd =
   in
   let query =
     "SELECT id, summary, priority, category_id, date_submitted, last_updated, \
-     reporter_id, handler_id, bug_text_id, target_version \
+     reporter_id, handler_id, bug_text_id, target_version, status \
      FROM mantis_bug_table ORDER BY id;"
   in
   let f = function
     | [|Some id; Some summary; Some priority; Some category_id;
         Some date_submitted; Some last_updated; Some reporter_id;
-        Some handler_id; Some bug_text_id; Some target_version|] ->
+        Some handler_id; Some bug_text_id; Some target_version;
+        Some status|] ->
         let id = int_of_string id in
         let category = Hashtbl.find categories (int_of_string category_id) in
         let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
@@ -214,11 +252,12 @@ let main dbd =
           Hashtbl.find texts (int_of_string bug_text_id)
         in
         let notes = Hashtbl.find_all notes id in
+        let status = Status.of_int (int_of_string status) in
         { Issue.id; summary; priority; category;
           date_submitted = timestamp date_submitted;
           last_updated = timestamp last_updated; reporter; handler;
           description; steps_to_reproduce; additional_information; target_version;
-          notes }
+          notes; status }
     | _ ->
         failwith "Unexpected response when querying bugs"
   in
