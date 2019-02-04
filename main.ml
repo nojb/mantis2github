@@ -59,6 +59,10 @@ module Status = struct
     | Resolved -> "resolved"
     | Closed -> "closed"
 
+  let is_closed = function
+    | Resolved | Closed -> true
+    | _ -> false
+
   let to_json st =
     let module J = Yojson.Basic in
     `String (to_string st)
@@ -102,12 +106,21 @@ module Issue = struct
       closed_at: string option;
     }
 
+  let body ~description ~steps_to_reproduce:_ ~additional_information:_ =
+    description
+
+  let labels ~priority:_ ~category:_ ~status:_ =
+    []
+
+  let milestone ~target_version:_ =
+    `Null
+
   let to_json
       {
         id = _;
         summary;
-        priority = _;
-        category = _;
+        priority;
+        category;
         date_submitted;
         last_updated;
         reporter = _;
@@ -115,23 +128,28 @@ module Issue = struct
         description;
         steps_to_reproduce;
         additional_information;
-        target_version = _;
+        target_version;
         notes;
-        status = _;
+        status;
         closed_at;
       }
     =
     let module J = Yojson.Basic in
+    let body = body ~description ~steps_to_reproduce ~additional_information in
+    let labels = labels ~priority ~category ~status in
+    let milestone = milestone ~target_version in
+    let closed = Status.is_closed status in
     let issue =
       [
         "title", `String summary;
-        "body", `String description;
+        "body", `String body;
         "created_at", `String date_submitted;
         "closed_at", ostr closed_at;
         "updated_at", `String last_updated;
         "asignee", ostr handler;
-        "steps_to_reproduce", `String steps_to_reproduce;
-        "additional_information", `String additional_information;
+        "milestone", milestone;
+        "closed", `Bool closed;
+        "labels", `List labels;
       ]
     in
     let comments = List.map ~f:Note.to_json notes in
@@ -272,10 +290,7 @@ let main dbd =
           | None -> None
           | Some (closed_at, st) ->
               assert (st = status);
-              begin match status with
-              | Status.Resolved | Status.Closed -> Some closed_at
-              | _ -> None
-              end
+              if Status.is_closed status then Some closed_at else None
         in
         { Issue.id; summary; priority; category;
           date_submitted = timestamp date_submitted;
