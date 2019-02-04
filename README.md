@@ -36,7 +36,7 @@ For now, the script assumes:
 You can run the script by doing:
 
 ```
-_build/install/default/bin/mantis2github > mantis.json 2> missing.txt
+_build/install/default/bin/mantis2github extract > mantis.json 2> missing.txt
 ```
 
 and you will obtain
