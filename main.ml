@@ -265,7 +265,9 @@ let main dbd =
 
 let connect () =
   try
-    Mysql.connect db
+    let dbd = Mysql.connect db in
+    Mysql.set_charset dbd "utf8";
+    dbd
   with Mysql.Error s ->
     prerr_endline s;
     exit 2
