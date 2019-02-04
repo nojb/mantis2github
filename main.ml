@@ -73,14 +73,12 @@ module Note = struct
       date_submitted: string;
     }
 
-  let to_json {reporter; text; last_modified; date_submitted} =
+  let to_json {reporter = _; text; last_modified = _; date_submitted} =
     let module J = Yojson.Basic in
     `Assoc
       [
-        "reporter", ostr reporter;
-        "text", `String text;
-        "last_modified", `String last_modified;
-        "date_submitted", `String date_submitted;
+        "body", `String text;
+        "created_at", `String date_submitted;
       ]
 end
 
@@ -106,42 +104,38 @@ module Issue = struct
 
   let to_json
       {
-        id;
+        id = _;
         summary;
-        priority;
-        category;
+        priority = _;
+        category = _;
         date_submitted;
         last_updated;
-        reporter;
+        reporter = _;
         handler;
         description;
         steps_to_reproduce;
         additional_information;
-        target_version;
+        target_version = _;
         notes;
-        status;
+        status = _;
         closed_at;
       }
     =
     let module J = Yojson.Basic in
-    `Assoc
+    let issue =
       [
-        "id", `Int id;
-        "summary", `String summary;
-        "priority", `String priority;
-        "category", `String category;
-        "date_submitted", `String date_submitted;
-        "last_updated", `String last_updated;
-        "reporter", ostr reporter;
-        "handler", ostr handler;
-        "description", `String description;
+        "title", `String summary;
+        "body", `String description;
+        "created_at", `String date_submitted;
+        "closed_at", ostr closed_at;
+        "updated_at", `String last_updated;
+        "asignee", ostr handler;
         "steps_to_reproduce", `String steps_to_reproduce;
         "additional_information", `String additional_information;
-        "target_version", `String target_version;
-        "notes", `List (List.map ~f:Note.to_json notes);
-        "status", Status.to_json status;
-        "closed_at", ostr closed_at;
       ]
+    in
+    let comments = List.map ~f:Note.to_json notes in
+    `Assoc ["issue", `Assoc issue; "comments", `List comments]
 end
 
 open Mysql
