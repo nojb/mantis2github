@@ -1,12 +1,10 @@
-module List = ListLabels
-
 let ostr = function
   | Some x -> `String x
   | None -> `Null
 
 let hashtbl_of_list l =
   let h = Hashtbl.create (List.length l) in
-  List.iter ~f:(fun (id, x) -> Hashtbl.add h id x) l;
+  List.iter (fun (id, x) -> Hashtbl.add h id x) l;
   h
 
 let user_map =
@@ -59,7 +57,7 @@ module Curl = struct
   let get_params = function
     | [] -> ""
     | l ->
-        "?" ^ String.concat "&" (List.map ~f:(fun (k, v) -> String.concat "=" [k; v]) l)
+        "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
 
   let get path params =
     request "GET" (url path ^ get_params params)
@@ -202,19 +200,11 @@ module Issue = struct
         "labels", `List labels;
       ]
     in
-    let comments = List.map ~f:Note.to_json notes in
+    let comments = List.map Note.to_json notes in
     `Assoc ["issue", `Assoc issue; "comments", `List comments]
 end
 
 open Mysql
-
-let db =
-  { dbhost = Some "127.0.0.1";
-    dbname = Some "db";
-    dbport = None;
-    dbpwd = Some "";
-    dbuser = Some "root";
-    dbsocket = None }
 
 let exec dbd ~f query =
   Mysql.map (Mysql.exec dbd query) ~f
@@ -313,7 +303,7 @@ let main dbd =
          WHERE field_name = 'status' ORDER BY date_modified ASC;"
     in
     let h = Hashtbl.create (List.length r) in
-    List.iter ~f:(fun (id, x) -> Hashtbl.replace h id x) r;
+    List.iter (fun (id, x) -> Hashtbl.replace h id x) r;
     h
   in
   let query =
@@ -352,7 +342,7 @@ let main dbd =
   in
   exec dbd ~f query
 
-let connect () =
+let connect db =
   try
     let dbd = Mysql.connect db in
     Mysql.set_charset dbd "utf8";
@@ -361,8 +351,8 @@ let connect () =
     prerr_endline s;
     exit 2
 
-let () =
-  let dbd = connect () in
+let extract db =
+  let dbd = connect db in
   match main dbd with
   | issues ->
       Mysql.disconnect dbd;
@@ -370,8 +360,55 @@ let () =
         let json = Issue.to_json issue in
         Printf.printf "%a\n" (Yojson.pretty_to_channel ~std:true) json
       in
-      List.iter ~f issues
+      List.iter f issues
   | exception e ->
       Printf.eprintf "ERROR: %s\n%!" (Printexc.to_string e);
       Mysql.disconnect dbd;
       exit 2
+
+open Cmdliner
+
+let db dbhost dbname dbport dbpwd dbuser =
+  {dbhost; dbname; dbport; dbpwd; dbuser; dbsocket = None}
+
+let db_t =
+  let docs = Manpage.s_options in
+  let dbhost =
+    let doc = "Server hostname." in
+    Arg.(value & opt (some string) (Some "127.0.0.1") & info ["host"] ~docs ~doc)
+  in
+  let dbname =
+    let doc = "Database name." in
+    Arg.(value & opt (some string) (Some "db") & info ["name"] ~docs ~doc)
+  in
+  let dbport =
+    let doc = "Server port." in
+    Arg.(value & opt (some int) None & info ["port"] ~docs ~doc)
+  in
+  let dbpwd =
+    let doc = "Server password." in
+    Arg.(value & opt (some string) None & info ["password"] ~docs ~doc)
+  in
+  let dbuser =
+    let doc = "Server username." in
+    Arg.(value & opt (some string) (Some "root") & info ["username"] ~docs ~doc)
+  in
+  Term.(const db $ dbhost $ dbname $ dbport $ dbpwd $ dbuser)
+
+let extract_cmd =
+  let doc = "Extract Mantis into JSON" in
+  let exits = Term.default_exits in
+  Term.(const extract $ db_t),
+  Term.info "extract" ~doc ~sdocs:Manpage.s_common_options ~exits
+
+let default_cmd =
+  let doc = "a Mantis => GH migration tool" in
+  let sdocs = Manpage.s_common_options in
+  let exits = Term.default_exits in
+  Term.(ret (const (fun _ -> `Help (`Pager, None)) $ const ())),
+  Term.info "mantis2github" ~version:"v0.1" ~doc ~sdocs ~exits
+
+let cmds = [extract_cmd]
+
+let () =
+  Term.(exit (eval_choice default_cmd cmds))

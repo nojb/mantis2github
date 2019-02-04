@@ -1,4 +1,4 @@
 (executable
  (name main)
  (public_name mantis2github)
- (libraries unix mysql yojson))
+ (libraries unix mysql yojson cmdliner))
