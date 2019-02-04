@@ -101,6 +101,7 @@ module Issue = struct
       target_version: string;
       notes: Note.t list;
       status: Status.t;
+      closed_at: string option;
     }
 
   let to_json
@@ -119,6 +120,7 @@ module Issue = struct
         target_version;
         notes;
         status;
+        closed_at;
       }
     =
     let module J = Yojson.Basic in
@@ -138,6 +140,7 @@ module Issue = struct
         "target_version", `String target_version;
         "notes", `List (List.map ~f:Note.to_json notes);
         "status", Status.to_json status;
+        "closed_at", ostr closed_at;
       ]
 end
 
@@ -234,6 +237,23 @@ let main dbd =
     in
     hashtbl_of_list r
   in
+  let statuses =
+    let f = function
+      | [|Some bug_id; Some date_modified; Some new_value|] ->
+          int_of_string bug_id,
+          (timestamp date_modified, Status.of_int (int_of_string new_value))
+      | _ ->
+          failwith "Unexpected response when querying history"
+    in
+    let r =
+      exec dbd ~f
+        "SELECT bug_id, date_modified, new_value FROM mantis_bug_history_table \
+         WHERE field_name = 'status' ORDER BY date_modified ASC;"
+    in
+    let h = Hashtbl.create (List.length r) in
+    List.iter ~f:(fun (id, x) -> Hashtbl.replace h id x) r;
+    h
+  in
   let query =
     "SELECT id, summary, priority, category_id, date_submitted, last_updated, \
      reporter_id, handler_id, bug_text_id, target_version, status \
@@ -253,11 +273,21 @@ let main dbd =
         in
         let notes = Hashtbl.find_all notes id in
         let status = Status.of_int (int_of_string status) in
+        let closed_at =
+          match Hashtbl.find_opt statuses id with
+          | None -> None
+          | Some (closed_at, st) ->
+              assert (st = status);
+              begin match status with
+              | Status.Resolved | Status.Closed -> Some closed_at
+              | _ -> None
+              end
+        in
         { Issue.id; summary; priority; category;
           date_submitted = timestamp date_submitted;
           last_updated = timestamp last_updated; reporter; handler;
           description; steps_to_reproduce; additional_information; target_version;
-          notes; status }
+          notes; status; closed_at }
     | _ ->
         failwith "Unexpected response when querying bugs"
   in
