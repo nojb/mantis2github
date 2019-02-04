@@ -46,7 +46,7 @@ module Curl = struct
     Buffer.contents b
 
   let request meth url =
-    let cmd = Printf.sprintf "curl -X %s %s" meth url in
+    let cmd = Printf.sprintf "curl -S -s -X %s %s" meth url in
     let tmp = Filename.temp_file "curl" "out" in
     assert (Sys.command (Printf.sprintf "%s > %s" cmd tmp) = 0);
     let ic = open_in_bin tmp in
@@ -366,6 +366,10 @@ let extract db =
       Mysql.disconnect dbd;
       exit 2
 
+let milestones () =
+  let l = Curl.list_milestones () in
+  List.iter print_endline (List.map fst l)
+
 open Cmdliner
 
 let db dbhost dbname dbport dbpwd dbuser =
@@ -401,6 +405,11 @@ let extract_cmd =
   Term.(const extract $ db_t),
   Term.info "extract" ~doc ~sdocs:Manpage.s_common_options ~exits
 
+let milestones_cmd =
+  let doc = "List milestones in ocaml/ocaml" in
+  Term.(const milestones $ const ()),
+  Term.info "milestones" ~doc
+
 let default_cmd =
   let doc = "a Mantis => GH migration tool" in
   let sdocs = Manpage.s_common_options in
@@ -408,7 +417,7 @@ let default_cmd =
   Term.(ret (const (fun _ -> `Help (`Pager, None)) $ const ())),
   Term.info "mantis2github" ~version:"v0.1" ~doc ~sdocs ~exits
 
-let cmds = [extract_cmd]
+let cmds = [extract_cmd; milestones_cmd]
 
 let () =
   Term.(exit (eval_choice default_cmd cmds))
