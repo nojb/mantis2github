@@ -28,55 +28,82 @@ let user_map =
   in
   loop ()
 
+type gh =
+  {
+    owner: string;
+    repo: string;
+    token: string option;
+  }
+
 module Curl = struct
   let root = "https://api.github.com"
-  let owner = "ocaml"
-  let repo = "ocaml"
 
-  let subst = function
-    | "owner" -> owner
-    | "repo" -> repo
-    | s -> failwith (Printf.sprintf "Bad substitution: %s" s)
+  let with_params url = function
+    | [] -> url
+    | l ->
+        url ^ "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
 
-  let url path =
-    let b = Buffer.create (String.length path) in
-    Buffer.add_string b root;
-    Buffer.add_char b '/';
-    Buffer.add_substitute b subst path;
-    Buffer.contents b
+  module J = Yojson.Basic.Util
 
-  let request meth url =
-    let cmd = Printf.sprintf "curl -S -s -X %s %s" meth url in
+  let curl ?(x = "GET") ?(h = []) ?d url =
+    let headers =
+      match h with
+      | [] -> ""
+      | l ->
+          String.concat " "
+            (List.map (fun (k, v) -> "-H \"" ^ k ^ ": " ^ v ^ "\"") l) ^ " "
+    in
+    let data =
+      match d with
+      | None -> ""
+      | Some d ->
+          let filename, oc = Filename.open_temp_file "curl" "data" in
+          set_binary_mode_out oc true;
+          output_string oc d;
+          close_out oc;
+          "--data-binary @" ^ filename ^ " "
+    in
+    let cmd = Printf.sprintf "curl -Ss %s%s-X %s %s/%s" data headers x root url in
+    Printf.eprintf "+ %s\n%!" cmd;
     let tmp = Filename.temp_file "curl" "out" in
     assert (Sys.command (Printf.sprintf "%s > %s" cmd tmp) = 0);
     let ic = open_in_bin tmp in
     let s = really_input_string ic (in_channel_length ic) in
     close_in ic;
-    Yojson.Basic.from_string s
+    let json = Yojson.Basic.from_string s in
+    Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+    match J.member "message" json with
+    | `String s -> failwith s
+    | _ ->
+        json
 
-  let get_params = function
-    | [] -> ""
-    | l ->
-        "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
-
-  let get path params =
-    request "GET" (url path ^ get_params params)
-
-  let list_milestones () =
-    let open Yojson.Basic.Util in
-    let json = get "repos/${owner}/${repo}/milestones" ["state", "all"] in
+  let list_milestones {owner; repo; token} =
+    let url = with_params (Printf.sprintf "repos/%s/%s/milestones" owner repo) ["state", "all"] in
     let f json =
-      let title = json |> member "title" |> to_string in
-      let number = json |> member "number" |> to_int in
+      let title = json |> J.member "title" |> J.to_string in
+      let number = json |> J.member "number" |> J.to_int in
       Some (title, number)
     in
-    to_list json |> filter_map f
-end
+    let h = match token with Some token -> ["Authorization", "token " ^ token] | None -> [] in
+    curl ~h url |> J.to_list |> J.filter_map f
 
-(*
-let () =
-  List.iter ~f:(fun (title, number) -> Printf.eprintf "%S (%d)\n" title number) (Curl.list_milestones ())
-*)
+  let is_imported {owner; repo; token} id =
+    let h = ["Accept", "application/vnd.github.golden-comet-preview+json"] in
+    let url = Printf.sprintf "repos/%s/%s/import/issues/%d" owner repo id in
+    let h = match token with Some token -> ("Authorization", "token " ^ token) :: h | None -> h in
+    match curl ~h url |> J.member "status" |> J.to_string with
+    | "imported" -> true
+    | "failed" -> failwith "Import failed!"
+    | _ -> false
+
+  let start_import {owner; repo; token} json =
+    let h = ["Accept", "application/vnd.github.golden-comet-preview+json"] in
+    let h = match token with Some token -> ("Authorization", "token " ^ token) :: h | None -> h in
+    let url = Printf.sprintf "repos/%s/%s/import/issues" owner repo in
+    let d = Yojson.Basic.pretty_to_string json in
+    Printf.eprintf "%s\n%!" d;
+    curl ~x:"POST" ~h ~d url |> J.member "id" |> J.to_int
+end
 
 module Status = struct
   type t =
@@ -137,7 +164,6 @@ end
 module Issue = struct
   type t =
     {
-      id: int;
       summary: string;
       priority: string;
       category: string;
@@ -165,7 +191,6 @@ module Issue = struct
 
   let to_json
       {
-        id = _;
         summary;
         priority;
         category;
@@ -194,7 +219,7 @@ module Issue = struct
         "created_at", `String date_submitted;
         "closed_at", ostr closed_at;
         "updated_at", `String last_updated;
-        "asignee", ostr handler;
+        "assignee", ostr handler;
         "milestone", milestone;
         "closed", `Bool closed;
         "labels", `List labels;
@@ -234,8 +259,8 @@ let main dbd =
             match Hashtbl.find_opt user_map user_name with
             | Some s -> s
             | None ->
-                Printf.eprintf "WARNING: user_map: missing user: %S\n%!"
-                  user_name;
+                (* Printf.eprintf "WARNING: user_map: missing user: %S\n%!" *)
+                (*   user_name; *)
                 user_name ^ "@Mantis"
           in
           int_of_string id, gh_user
@@ -332,11 +357,11 @@ let main dbd =
               assert (st = status);
               if Status.is_closed status then Some closed_at else None
         in
-        { Issue.id; summary; priority; category;
-          date_submitted = timestamp date_submitted;
-          last_updated = timestamp last_updated; reporter; handler;
-          description; steps_to_reproduce; additional_information; target_version;
-          notes; status; closed_at }
+        id, { Issue.summary; priority; category;
+              date_submitted = timestamp date_submitted;
+              last_updated = timestamp last_updated; reporter; handler;
+              description; steps_to_reproduce; additional_information; target_version;
+              notes; status; closed_at }
     | _ ->
         failwith "Unexpected response when querying bugs"
   in
@@ -351,24 +376,40 @@ let connect db =
     prerr_endline s;
     exit 2
 
-let extract db =
+let fetch db =
   let dbd = connect db in
   match main dbd with
   | issues ->
       Mysql.disconnect dbd;
-      let f issue =
-        let json = Issue.to_json issue in
-        Printf.printf "%a\n" (Yojson.pretty_to_channel ~std:true) json
-      in
-      List.iter f issues
+      issues
   | exception e ->
       Printf.eprintf "ERROR: %s\n%!" (Printexc.to_string e);
       Mysql.disconnect dbd;
       exit 2
 
-let milestones () =
-  let l = Curl.list_milestones () in
+let extract db =
+  let f (_, issue) =
+    let json = Issue.to_json issue in
+    Printf.printf "%a\n" (Yojson.pretty_to_channel ~std:true) json
+  in
+  List.iter f (fetch db)
+
+let milestones gh =
+  let l = Curl.list_milestones gh in
   List.iter print_endline (List.map fst l)
+
+let create_issue gh issue =
+  let id = Curl.start_import gh (Issue.to_json issue) in
+  let rec loop () =
+    Unix.sleep 1;
+    if Curl.is_imported gh id then prerr_endline "Done!"
+    else (prerr_endline "Waiting..."; loop ())
+  in
+  loop ()
+
+let create_issues gh db bug_ids =
+  let issues = hashtbl_of_list (fetch db) in
+  List.iter (fun id -> create_issue gh (Hashtbl.find issues id)) bug_ids
 
 open Cmdliner
 
@@ -405,10 +446,36 @@ let extract_cmd =
   Term.(const extract $ db_t),
   Term.info "extract" ~doc ~sdocs:Manpage.s_common_options ~exits
 
+let github_t =
+  let docs = Manpage.s_options in
+  let owner =
+    let doc = "Github owner." in
+    Arg.(required & opt (some string) None & info ["owner"] ~docs ~doc)
+  in
+  let repo =
+    let doc = "Github repo." in
+    Arg.(required & opt (some string) None & info ["repo"] ~docs ~doc)
+  in
+  let token =
+    let doc = "Github token." in
+    Arg.(value & opt (some string) None & info ["token"] ~docs ~doc)
+  in
+  let github owner repo token = {owner; repo; token} in
+  Term.(const github $ owner $ repo $ token)
+
 let milestones_cmd =
   let doc = "List milestones in ocaml/ocaml" in
-  Term.(const milestones $ const ()),
+  Term.(const milestones $ github_t),
   Term.info "milestones" ~doc
+
+let bug_ids_t =
+  let doc = "Mantis bug numbers." in
+  Arg.(value & pos_all int [] & info [] ~doc)
+
+let create_issue_cmd =
+  let doc = "Create an issue" in
+  Term.(const create_issues $ github_t $ db_t $ bug_ids_t),
+  Term.info "create-issue" ~doc ~sdocs:Manpage.s_common_options
 
 let default_cmd =
   let doc = "a Mantis => GH migration tool" in
@@ -417,7 +484,7 @@ let default_cmd =
   Term.(ret (const (fun _ -> `Help (`Pager, None)) $ const ())),
   Term.info "mantis2github" ~version:"v0.1" ~doc ~sdocs ~exits
 
-let cmds = [extract_cmd; milestones_cmd]
+let cmds = [extract_cmd; milestones_cmd; create_issue_cmd]
 
 let () =
   Term.(exit (eval_choice default_cmd cmds))
