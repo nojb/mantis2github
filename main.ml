@@ -1,6 +1,7 @@
-let ostr = function
-  | Some x -> `String x
-  | None -> `Null
+let ostr s o l =
+  match o with
+  | Some x -> (s, `String x) :: l
+  | None -> l
 
 let hashtbl_of_list l =
   let h = Hashtbl.create (List.length l) in
@@ -213,13 +214,13 @@ module Issue = struct
     let milestone = milestone ~target_version in
     let closed = Status.is_closed status in
     let issue =
+      ostr "assignee" handler @@
+      ostr "closed_at" closed_at @@
       [
         "title", `String summary;
         "body", `String body;
         "created_at", `String date_submitted;
-        "closed_at", ostr closed_at;
         "updated_at", `String last_updated;
-        "assignee", ostr handler;
         "milestone", milestone;
         "closed", `Bool closed;
         "labels", `List labels;
