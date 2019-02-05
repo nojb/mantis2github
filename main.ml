@@ -23,15 +23,18 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
+module Hashtbl = struct
+  include Hashtbl
+  let of_list l =
+    let h = Hashtbl.create (List.length l) in
+    List.iter (fun (id, x) -> Hashtbl.add h id x) l;
+    h
+end
+
 let ostr s o l =
   match o with
   | Some x -> (s, `String x) :: l
   | None -> l
-
-let hashtbl_of_list l =
-  let h = Hashtbl.create (List.length l) in
-  List.iter (fun (id, x) -> Hashtbl.add h id x) l;
-  h
 
 let user_map =
   let h = Hashtbl.create 17 in
@@ -164,8 +167,9 @@ module Status = struct
     | Resolved | Closed -> true
     | _ -> false
 
+  module J = Yojson.Basic
+
   let to_json st =
-    let module J = Yojson.Basic in
     `String (to_string st)
 end
 
@@ -178,8 +182,9 @@ module Note = struct
       date_submitted: string;
     }
 
+  module J = Yojson.Basic
+
   let to_json {reporter = _; text; last_modified = _; date_submitted} =
-    let module J = Yojson.Basic in
     `Assoc
       [
         "body", `String text;
@@ -296,7 +301,7 @@ let main dbd =
     let r =
       exec dbd ~f "SELECT id, username FROM mantis_user_table;"
     in
-    hashtbl_of_list r
+    Hashtbl.of_list r
   in
   let texts =
     let f = function
@@ -309,7 +314,7 @@ let main dbd =
       exec dbd ~f "SELECT id, description, steps_to_reproduce, additional_information \
                    FROM mantis_bug_text_table;"
     in
-    hashtbl_of_list r
+    Hashtbl.of_list r
   in
   let notes =
     let texts =
@@ -320,7 +325,7 @@ let main dbd =
             failwith "Unexpected response when querying notes texts"
       in
       let r = exec dbd ~f "SELECT id, note FROM mantis_bugnote_text_table;" in
-      hashtbl_of_list r
+      Hashtbl.of_list r
     in
     let f = function
       | [|Some bug_id; Some reporter_id; Some bugnote_text_id;
@@ -338,7 +343,7 @@ let main dbd =
                    last_modified, date_submitted \
                    FROM mantis_bugnote_table ORDER BY date_submitted DESC;"
     in
-    hashtbl_of_list r
+    Hashtbl.of_list r
   in
   let statuses =
     let f = function
@@ -434,7 +439,7 @@ let create_issue gh issue =
   loop ()
 
 let create_issues gh db bug_ids =
-  let issues = hashtbl_of_list (fetch db) in
+  let issues = Hashtbl.of_list (fetch db) in
   List.iter (fun id -> create_issue gh (Hashtbl.find issues id)) bug_ids
 
 open Cmdliner
