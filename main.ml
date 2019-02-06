@@ -277,8 +277,6 @@ module Issue = struct
     `Assoc ["issue", `Assoc issue; "comments", `List comments]
 end
 
-open Mysql
-
 let exec dbd ~f query =
   Mysql.map (Mysql.exec dbd query) ~f
 
@@ -453,7 +451,7 @@ let create_issues gh db bug_ids =
 open Cmdliner
 
 let db dbhost dbname dbport dbpwd dbuser =
-  {dbhost; dbname; dbport; dbpwd; dbuser; dbsocket = None}
+  {Mysql.dbhost; dbname; dbport; dbpwd; dbuser; dbsocket = None}
 
 let db_t =
   let docs = Manpage.s_options in
