@@ -282,18 +282,27 @@ module Issue = struct
 
   let fence = String.make 6 '`'
 
-  let body ~id ?(reporter = "") ~description ~steps_to_reproduce ~additional_information =
+  let body ~id ?(reporter = "") ~tags ~category
+      ~description ~steps_to_reproduce ~additional_information
+    =
     let buf = Buffer.create 101 in
+    let add1 title s =
+      let s = String.trim s in
+      if s <> "" then Printf.bprintf buf "%s: %s\n" title s
+    in
     let add title s =
       let s = String.trim s in
-      if s <> "" then
-        Printf.bprintf buf "**%s**\n%s\n%s\n%s\n" title fence s fence
+      if s <> "" then Printf.bprintf buf "%s:\n\n%s\n" title s
     in
-    add "ID" (Printf.sprintf "%07d" id);
-    add "Reporter" reporter;
+    Printf.bprintf buf "%s\n" fence;
+    add1 "ID" (Printf.sprintf "%07d" id);
+    add1 "Reporter" reporter;
+    add1 "Category" category;
+    add1 "Tags" (String.concat ", " tags);
     add "Description" description;
     add "Steps to reproduce" steps_to_reproduce;
     add "Additional information" additional_information;
+    Printf.bprintf buf "%s\n" fence;
     Buffer.contents buf
 
   let labels ~priority:_ ~category:_ ~status:_ =
@@ -323,10 +332,13 @@ module Issue = struct
         closed_at;
         resolution = _;
         related = _;
-        tags = _;
+        tags;
       }
     =
-    let body = body ~id ?reporter ~description ~steps_to_reproduce ~additional_information in
+    let body =
+      body ~id ?reporter ~tags ~category
+        ~description ~steps_to_reproduce ~additional_information
+    in
     let labels = labels ~priority ~category ~status in
     let milestone = milestone ~target_version in
     let closed = Status.is_closed status in
@@ -475,10 +487,7 @@ let main dbd =
       | _ ->
           failwith "Unexpected response when querying tags"
     in
-    let r =
-      exec dbd ~f
-        "SELECT tag_id, name FROM mantis_tag_table;"
-    in
+    let r = exec dbd ~f "SELECT id, name FROM mantis_tag_table;" in
     Hashtbl.of_list r
   in
   let tags =
