@@ -323,7 +323,7 @@ module Issue = struct
   let milestone ~target_version:_ =
     `Null
 
-  let to_json
+  let to_json ?assignee
       {
         id;
         summary;
@@ -361,11 +361,15 @@ module Issue = struct
       | Some _ as x, _ -> x
     in
     let handler =
-      match handler with
-      | Some s ->
-          Hashtbl.find_opt user_map s
+      match assignee with
+      | Some _ as x -> x
       | None ->
-          None
+          begin match handler with
+          | Some s ->
+              Hashtbl.find_opt user_map s
+          | None ->
+              None
+          end
     in
     let issue =
       ostr "assignee" handler @@
@@ -592,6 +596,22 @@ let create_issues gh db bug_ids =
   let issues = Hashtbl.of_list (fetch db) in
   List.iter (fun id -> Curl.create_issue gh (Issue.to_json (Hashtbl.find issues id))) bug_ids
 
+let migrate gh db assignee =
+  let issues = Hashtbl.of_list (fetch db) in
+  let n = Hashtbl.length issues in
+  let rec loop count idx =
+    if count >= n then ()
+    else begin
+      match Hashtbl.find_opt issues idx with
+      | None ->
+          loop count (succ idx)
+      | Some issue ->
+          Curl.create_issue gh (Issue.to_json ?assignee issue);
+          loop (succ count) (succ idx)
+    end
+  in
+  loop 0 0
+
 open Cmdliner
 
 let db dbhost dbname dbport dbpwd dbuser =
@@ -654,9 +674,18 @@ let bug_ids_t =
   Arg.(value & pos_all int [] & info [] ~doc)
 
 let create_issue_cmd =
-  let doc = "Create an issue" in
+  let doc = "Create an issue." in
   Term.(const create_issues $ github_t $ db_t $ bug_ids_t),
   Term.info "create-issue" ~doc ~sdocs:Manpage.s_common_options
+
+let force_assignee_t =
+  let doc = "Override assignee." in
+  Arg.(value & opt (some string) None & info ["assignee"] ~doc)
+
+let migrate_cmd =
+  let doc = "Migrate all issues." in
+  Term.(const migrate $ github_t $ db_t $ force_assignee_t),
+  Term.info "migrate" ~doc
 
 let default_cmd =
   let doc = "a Mantis => GH migration tool" in
