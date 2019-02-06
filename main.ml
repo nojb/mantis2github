@@ -725,7 +725,7 @@ let migrate gh db assignee nmax =
           let starttime = Unix.gettimeofday () in
           let id = Curl.create_issue gh (Issue.to_json ?assignee issue) in
           let endtime = Unix.gettimeofday () in
-          Printf.printf "%4d %4d %.1f\n" issue.Issue.id id (endtime -. starttime);
+          Printf.printf "%4d %4d %.1f\n%!" issue.Issue.id id (endtime -. starttime);
           loop (succ count) (succ idx)
     end
   in
