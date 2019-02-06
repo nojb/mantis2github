@@ -177,6 +177,48 @@ module Labels = struct
     | Wontfix -> "wontfix"
 end
 
+module Priority = struct
+  type t =
+    | None
+    | Low
+    | Normal
+    | High
+    | Urgent
+    | Immediate
+
+  let of_int = function
+    | 10 -> None
+    | 20 -> Low
+    | 30 -> Normal
+    | 40 -> High
+    | 50 -> Urgent
+    | 60 -> Immediate
+    | n -> Printf.ksprintf failwith "Unexpected priority code: %d" n
+end
+
+module Severity = struct
+  type t =
+    | Feature
+    | Trivial
+    | Text
+    | Tweak
+    | Minor
+    | Major
+    | Crash
+    | Block
+
+  let of_int = function
+    | 10 -> Feature
+    | 20 -> Trivial
+    | 30 -> Text
+    | 40 -> Tweak
+    | 50 -> Minor
+    | 60 -> Major
+    | 70 -> Crash
+    | 80 -> Block
+    | n -> Printf.ksprintf failwith "Unexpected severity code: %d" n
+end
+
 module Resolution = struct
   type t =
     | Open
