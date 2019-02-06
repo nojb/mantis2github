@@ -143,7 +143,7 @@ module Curl = struct
     let rec loop n =
       if is_imported gh id then prerr_endline "Done!"
       else begin
-        Printf.eprintf "Waiting %ds" n;
+        Printf.eprintf "Waiting %ds...\n" n;
         Unix.sleep n;
         loop (2 * n)
       end
@@ -208,6 +208,7 @@ end
 module Issue = struct
   type t =
     {
+      id: int;
       summary: string;
       priority: string;
       category: string;
@@ -224,8 +225,21 @@ module Issue = struct
       closed_at: string option;
     }
 
-  let body ~description ~steps_to_reproduce:_ ~additional_information:_ =
-    description
+  let fence = String.make 6 '`'
+
+  let body ~id ?(reporter = "") ~description ~steps_to_reproduce ~additional_information =
+    let buf = Buffer.create 101 in
+    let add title s =
+      let s = String.trim s in
+      if s <> "" then
+        Printf.bprintf buf "**%s**\n%s\n%s\n%s\n" title fence s fence
+    in
+    add "ID" (Printf.sprintf "%07d" id);
+    add "Reporter" reporter;
+    add "Description" description;
+    add "Steps to reproduce" steps_to_reproduce;
+    add "Additional information" additional_information;
+    Buffer.contents buf
 
   let labels ~priority:_ ~category:_ ~status:_ =
     []
@@ -235,12 +249,13 @@ module Issue = struct
 
   let to_json
       {
+        id;
         summary;
         priority;
         category;
         date_submitted;
         last_updated;
-        reporter = _;
+        reporter;
         handler;
         description;
         steps_to_reproduce;
@@ -251,7 +266,7 @@ module Issue = struct
         closed_at;
       }
     =
-    let body = body ~description ~steps_to_reproduce ~additional_information in
+    let body = body ~id ?reporter ~description ~steps_to_reproduce ~additional_information in
     let labels = labels ~priority ~category ~status in
     let milestone = milestone ~target_version in
     let closed = Status.is_closed status in
@@ -260,6 +275,13 @@ module Issue = struct
       | None, true -> Some last_updated
       | None, false -> None
       | Some _ as x, _ -> x
+    in
+    let handler =
+      match handler with
+      | Some s ->
+          Hashtbl.find_opt user_map s
+      | None ->
+          None
     in
     let issue =
       ostr "assignee" handler @@
@@ -302,15 +324,7 @@ let main dbd =
   let users =
     let f = function
       | [|Some id; Some user_name|] ->
-          let gh_user =
-            match Hashtbl.find_opt user_map user_name with
-            | Some s -> s
-            | None ->
-                (* Printf.eprintf "WARNING: user_map: missing user: %S\n%!" *)
-                (*   user_name; *)
-                user_name ^ "@Mantis"
-          in
-          int_of_string id, gh_user
+          int_of_string id, user_name
       | _ ->
           failwith "Unexpected response when querying users"
     in
@@ -404,11 +418,12 @@ let main dbd =
               assert (st = status);
               if Status.is_closed status then Some closed_at else None
         in
-        id, { Issue.summary; priority; category;
-              date_submitted = timestamp date_submitted;
-              last_updated = timestamp last_updated; reporter; handler;
-              description; steps_to_reproduce; additional_information; target_version;
-              notes; status; closed_at }
+        id,
+        { Issue.id; summary; priority; category;
+          date_submitted = timestamp date_submitted;
+          last_updated = timestamp last_updated; reporter; handler;
+          description; steps_to_reproduce; additional_information; target_version;
+          notes; status; closed_at }
     | _ ->
         failwith "Unexpected response when querying bugs"
   in
