@@ -141,12 +141,8 @@ module Curl = struct
   let create_issue gh json =
     let id = start_import gh json in
     let rec loop n =
-      if is_imported gh id then prerr_endline "Done!"
-      else begin
-        Printf.eprintf "Waiting %ds...\n" n;
-        Unix.sleep n;
-        loop (2 * n)
-      end
+      if is_imported gh id then id
+      else (Unix.sleep n; loop (2 * n))
     in
     loop 1
 end
@@ -594,19 +590,24 @@ let milestones gh =
 
 let create_issues gh db bug_ids =
   let issues = Hashtbl.of_list (fetch db) in
-  List.iter (fun id -> Curl.create_issue gh (Issue.to_json (Hashtbl.find issues id))) bug_ids
+  List.iter (fun id ->
+      ignore (Curl.create_issue gh (Issue.to_json (Hashtbl.find issues id)))
+    ) bug_ids
 
-let migrate gh db assignee =
+let migrate gh db assignee nmax =
   let issues = Hashtbl.of_list (fetch db) in
   let n = Hashtbl.length issues in
   let rec loop count idx =
-    if count >= n then ()
+    if count >= min n nmax then ()
     else begin
       match Hashtbl.find_opt issues idx with
       | None ->
           loop count (succ idx)
       | Some issue ->
-          Curl.create_issue gh (Issue.to_json ?assignee issue);
+          let starttime = Unix.gettimeofday () in
+          let id = Curl.create_issue gh (Issue.to_json ?assignee issue) in
+          let endtime = Unix.gettimeofday () in
+          Printf.printf "%4d %4d %.1f\n" issue.Issue.id id (endtime -. starttime);
           loop (succ count) (succ idx)
     end
   in
@@ -682,9 +683,13 @@ let force_assignee_t =
   let doc = "Override assignee." in
   Arg.(value & opt (some string) None & info ["assignee"] ~doc)
 
+let nmax_t =
+  let doc = "Max number of issues to migrate." in
+  Arg.(value & opt int max_int & info ["max"] ~doc)
+
 let migrate_cmd =
   let doc = "Migrate all issues." in
-  Term.(const migrate $ github_t $ db_t $ force_assignee_t),
+  Term.(const migrate $ github_t $ db_t $ force_assignee_t $ nmax_t),
   Term.info "migrate" ~doc
 
 let default_cmd =
