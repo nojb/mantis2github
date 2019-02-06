@@ -276,6 +276,7 @@ module Issue = struct
       status: Status.t;
       closed_at: string option;
       resolution: Resolution.t;
+      related: int list;
     }
 
   let fence = String.make 6 '`'
@@ -320,6 +321,7 @@ module Issue = struct
         status;
         closed_at;
         resolution = _;
+        related = _;
       }
     =
     let body = body ~id ?reporter ~description ~steps_to_reproduce ~additional_information in
@@ -448,6 +450,22 @@ let main dbd =
     List.iter (fun (id, x) -> Hashtbl.replace h id x) r;
     h
   in
+  let relationships =
+    let f = function
+      | [|Some source_bug_id; Some destination_bug_id|] ->
+          int_of_string source_bug_id, int_of_string destination_bug_id
+      | _ ->
+          failwith "Unexpected response when querying relationships"
+    in
+    let r =
+      exec dbd ~f
+        "SELECT source_bug_id, destination_bug_id \
+         FROM mantis_bug_relationship_table;"
+    in
+    let h = Hashtbl.create (List.length r) in
+    List.iter (fun (id, x) -> Hashtbl.add h id x; Hashtbl.add h x id) r;
+    h
+  in
   let query =
     "SELECT id, summary, priority, category_id, date_submitted, last_updated, \
      reporter_id, handler_id, bug_text_id, version, target_version, fixed_in_version, status, \
@@ -475,13 +493,14 @@ let main dbd =
               if Status.is_closed status then Some closed_at else None
         in
         let resolution = Resolution.of_int (int_of_string resolution) in
+        let related = List.sort Stdlib.compare (Hashtbl.find_all relationships id) in
         id,
         { Issue.id; summary; priority; category;
           date_submitted = timestamp date_submitted;
           last_updated = timestamp last_updated; reporter; handler;
           description; steps_to_reproduce; additional_information;
           version; target_version; fixed_in_version;
-          notes; status; closed_at; resolution }
+          notes; status; closed_at; resolution; related }
     | _ ->
         failwith "Unexpected response when querying bugs"
   in
