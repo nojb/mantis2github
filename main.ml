@@ -75,6 +75,7 @@ module Curl = struct
       | Some token -> ("Authorization", "token " ^ token) :: headers
       | None -> headers
     in
+    let headers = ("Accept", "application/vnd.github.golden-comet-preview+json") :: headers in
     let headers =
       match headers with
       | [] -> ""
@@ -123,18 +124,16 @@ module Curl = struct
     curl ~params:["state", "all"] gh "milestones" |> J.to_list |> J.filter_map f
 
   let is_imported gh id =
-    let headers = ["Accept", "application/vnd.github.golden-comet-preview+json"] in
     let route = Printf.sprintf "import/issues/%d" id in
-    match curl ~headers gh route |> J.member "status" |> J.to_string with
+    match curl gh route |> J.member "status" |> J.to_string with
     | "imported" -> true
     | "failed" -> failwith "Import failed!"
     | _ -> false
 
   let start_import gh json =
-    let headers = ["Accept", "application/vnd.github.golden-comet-preview+json"] in
     let data = Yojson.Basic.pretty_to_string json in
     Printf.eprintf "%s\n%!" data;
-    curl ~x:"POST" ~headers ~data gh "import/issues" |> J.member "id" |> J.to_int
+    curl ~x:"POST" ~data gh "import/issues" |> J.member "id" |> J.to_int
 end
 
 module Status = struct
