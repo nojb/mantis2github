@@ -67,32 +67,40 @@ type gh =
 module Curl = struct
   let root = "https://api.github.com"
 
-  let with_params url = function
-    | [] -> url
-    | l ->
-        url ^ "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
-
   module J = Yojson.Basic.Util
 
-  let curl ?(x = "GET") ?(h = []) ?d url =
+  let curl ?(x = "GET") ?(headers = []) ?data ?(params = []) {owner; repo; token} route =
     let headers =
-      match h with
+      match token with
+      | Some token -> ("Authorization", "token " ^ token) :: headers
+      | None -> headers
+    in
+    let headers =
+      match headers with
       | [] -> ""
       | l ->
           String.concat " "
             (List.map (fun (k, v) -> "-H \"" ^ k ^ ": " ^ v ^ "\"") l) ^ " "
     in
     let data =
-      match d with
+      match data with
       | None -> ""
-      | Some d ->
+      | Some data ->
           let filename, oc = Filename.open_temp_file "curl" "data" in
           set_binary_mode_out oc true;
-          output_string oc d;
+          output_string oc data;
           close_out oc;
           "--data-binary @" ^ filename ^ " "
     in
-    let cmd = Printf.sprintf "curl -Ss %s%s-X %s %s/%s" data headers x root url in
+    let params =
+      match params with
+      | [] -> ""
+      | l -> "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
+    in
+    let cmd =
+      Printf.sprintf "curl -Ss %s%s-X %s %s/repos/%s/%s/%s%s"
+        data headers x root owner repo route params
+    in
     Printf.eprintf "+ %s\n%!" cmd;
     let tmp = Filename.temp_file "curl" "out" in
     assert (Sys.command (Printf.sprintf "%s > %s" cmd tmp) = 0);
@@ -106,32 +114,27 @@ module Curl = struct
     | _ ->
         json
 
-  let list_milestones {owner; repo; token} =
-    let url = with_params (Printf.sprintf "repos/%s/%s/milestones" owner repo) ["state", "all"] in
+  let list_milestones gh =
     let f json =
       let title = json |> J.member "title" |> J.to_string in
       let number = json |> J.member "number" |> J.to_int in
       Some (title, number)
     in
-    let h = match token with Some token -> ["Authorization", "token " ^ token] | None -> [] in
-    curl ~h url |> J.to_list |> J.filter_map f
+    curl ~params:["state", "all"] gh "milestones" |> J.to_list |> J.filter_map f
 
-  let is_imported {owner; repo; token} id =
-    let h = ["Accept", "application/vnd.github.golden-comet-preview+json"] in
-    let url = Printf.sprintf "repos/%s/%s/import/issues/%d" owner repo id in
-    let h = match token with Some token -> ("Authorization", "token " ^ token) :: h | None -> h in
-    match curl ~h url |> J.member "status" |> J.to_string with
+  let is_imported gh id =
+    let headers = ["Accept", "application/vnd.github.golden-comet-preview+json"] in
+    let route = Printf.sprintf "import/issues/%d" id in
+    match curl ~headers gh route |> J.member "status" |> J.to_string with
     | "imported" -> true
     | "failed" -> failwith "Import failed!"
     | _ -> false
 
-  let start_import {owner; repo; token} json =
-    let h = ["Accept", "application/vnd.github.golden-comet-preview+json"] in
-    let h = match token with Some token -> ("Authorization", "token " ^ token) :: h | None -> h in
-    let url = Printf.sprintf "repos/%s/%s/import/issues" owner repo in
-    let d = Yojson.Basic.pretty_to_string json in
-    Printf.eprintf "%s\n%!" d;
-    curl ~x:"POST" ~h ~d url |> J.member "id" |> J.to_int
+  let start_import gh json =
+    let headers = ["Accept", "application/vnd.github.golden-comet-preview+json"] in
+    let data = Yojson.Basic.pretty_to_string json in
+    Printf.eprintf "%s\n%!" data;
+    curl ~x:"POST" ~headers ~data gh "import/issues" |> J.member "id" |> J.to_int
 end
 
 module Status = struct
