@@ -715,21 +715,23 @@ let create_issues gh db bug_ids =
 let migrate gh db assignee nmax =
   let issues = Hashtbl.of_list (fetch db) in
   let n = Hashtbl.length issues in
-  let rec loop count idx =
+  let rec loop total count idx =
     if count >= min n nmax then ()
     else begin
       match Hashtbl.find_opt issues idx with
       | None ->
-          loop count (succ idx)
+          loop total count (succ idx)
       | Some issue ->
           let starttime = Unix.gettimeofday () in
           let id = Curl.create_issue gh (Issue.to_json ?assignee issue) in
           let endtime = Unix.gettimeofday () in
-          Printf.printf "%4d %4d %.1f\n%!" issue.Issue.id id (endtime -. starttime);
-          loop (succ count) (succ idx)
+          let delta = endtime -. starttime in
+          let total = total +. delta in
+          Printf.printf "%4d %4d %6.1f %6.1f\n%!" issue.Issue.id id delta total;
+          loop total (succ count) (succ idx)
     end
   in
-  loop 0 0
+  loop 0. 0 0
 
 open Cmdliner
 
