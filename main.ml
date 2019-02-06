@@ -23,6 +23,8 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
+module J = Yojson.Basic.Util
+
 module Hashtbl = struct
   include Hashtbl
   let of_list l =
@@ -66,8 +68,6 @@ type gh =
 
 module Curl = struct
   let root = "https://api.github.com"
-
-  module J = Yojson.Basic.Util
 
   let curl meth ?(headers = []) ?data ?(params = []) {owner; repo; token} route =
     let headers =
@@ -184,8 +184,6 @@ module Status = struct
     | Resolved | Closed -> true
     | _ -> false
 
-  module J = Yojson.Basic
-
   let to_json st =
     `String (to_string st)
 end
@@ -198,8 +196,6 @@ module Note = struct
       last_modified: string;
       date_submitted: string;
     }
-
-  module J = Yojson.Basic
 
   let to_json {reporter = _; text; last_modified = _; date_submitted} =
     `Assoc
@@ -255,11 +251,16 @@ module Issue = struct
         closed_at;
       }
     =
-    let module J = Yojson.Basic in
     let body = body ~description ~steps_to_reproduce ~additional_information in
     let labels = labels ~priority ~category ~status in
     let milestone = milestone ~target_version in
     let closed = Status.is_closed status in
+    let closed_at =
+      match closed_at, closed with
+      | None, true -> Some last_updated
+      | None, false -> None
+      | Some _ as x, _ -> x
+    in
     let issue =
       ostr "assignee" handler @@
       ostr "closed_at" closed_at @@
