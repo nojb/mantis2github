@@ -38,6 +38,11 @@ let ostr s o l =
   | Some x -> (s, `String x) :: l
   | None -> l
 
+let oint s o l =
+  match o with
+  | Some x -> (s, `Int x) :: l
+  | None -> l
+
 let user_map =
   let h = Hashtbl.create 17 in
   let ic = open_in "user_map.txt" in
@@ -328,7 +333,7 @@ module Issue = struct
     []
 
   let milestone ~target_version:_ =
-    `Null
+    None
 
   let to_json ?assignee
       {
@@ -382,12 +387,12 @@ module Issue = struct
     let issue =
       ostr "assignee" handler @@
       ostr "closed_at" closed_at @@
+      oint "milestone" milestone @@
       [
         "title", `String summary;
         "body", `String body;
         "created_at", `String date_submitted;
         "updated_at", `String last_updated;
-        "milestone", milestone;
         "closed", `Bool closed;
         "labels", `List labels;
       ]
