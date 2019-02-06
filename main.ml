@@ -357,15 +357,16 @@ module Issue = struct
       | Some _ as x, _ -> x
     in
     let handler =
-      match assignee with
-      | Some _ as x -> x
+      match handler with
+      | Some s ->
+          Hashtbl.find_opt user_map s
       | None ->
-          begin match handler with
-          | Some s ->
-              Hashtbl.find_opt user_map s
-          | None ->
-              None
-          end
+          None
+    in
+    let handler =
+      match handler with
+      | Some _ -> assignee
+      | None -> None
     in
     let issue =
       ostr "assignee" handler @@
