@@ -127,11 +127,21 @@ module Curl = struct
     get ~params:["state", "all"] gh "milestones" |> J.to_list |> J.filter_map f
 
   let is_imported gh id =
-    let route = Printf.sprintf "import/issues/%d" id in
-    match get gh route |> J.member "status" |> J.to_string with
-    | "imported" -> true
+    let json = get gh (Printf.sprintf "import/issues/%d" id) in
+    match json |> J.member "status" |> J.to_string with
+    | "imported" ->
+        let id =
+          json
+          |> J.member "issue_url"
+          |> J.to_string
+          |> String.split_on_char '/'
+          |> List.rev
+          |> List.hd
+          |> int_of_string
+        in
+        Some id
     | "failed" -> failwith "Import failed!"
-    | _ -> false
+    | _ -> None
 
   let start_import gh json =
     let data = Yojson.Basic.pretty_to_string json in
@@ -141,8 +151,9 @@ module Curl = struct
   let create_issue gh json =
     let id = start_import gh json in
     let rec loop n =
-      if is_imported gh id then id
-      else (Unix.sleep n; loop (2 * n))
+      match is_imported gh id with
+      | Some id -> id
+      | None -> Unix.sleep n; loop (2 * n)
     in
     loop 1
 end
