@@ -194,6 +194,14 @@ module Priority = struct
     | 50 -> Urgent
     | 60 -> Immediate
     | n -> Printf.ksprintf failwith "Unexpected priority code: %d" n
+
+  let to_string = function
+    | None -> ""
+    | Low -> "low"
+    | Normal -> "normal"
+    | High -> "high"
+    | Urgent -> "urgent"
+    | Immediate -> "immediate"
 end
 
 module Severity = struct
@@ -217,6 +225,16 @@ module Severity = struct
     | 70 -> Crash
     | 80 -> Block
     | n -> Printf.ksprintf failwith "Unexpected severity code: %d" n
+
+  let to_string = function
+    | Feature -> "feature"
+    | Trivial -> "trivial"
+    | Text -> "text"
+    | Tweak -> "tweak"
+    | Minor -> "minor"
+    | Major -> "major"
+    | Crash -> "crash"
+    | Block -> "block"
 end
 
 module Resolution = struct
@@ -326,7 +344,8 @@ module Issue = struct
     {
       id: int;
       summary: string;
-      priority: string;
+      priority: Priority.t;
+      severity: Severity.t;
       category: string;
       date_submitted: string;
       last_updated: string;
@@ -347,7 +366,8 @@ module Issue = struct
     }
 
   let body ~id ?(reporter = "") ~tags ~category ~version ~target_version ~fixed_in_version
-      ~description ~steps_to_reproduce ~additional_information
+      ~priority ~severity
+      ~description ~steps_to_reproduce ~additional_information ~related:_
     =
     let buf = Buffer.create 101 in
     let info =
@@ -363,6 +383,8 @@ module Issue = struct
           "Target version", target_version;
           "Fixed in version", fixed_in_version;
           "Category", category;
+          "Priority", Priority.to_string priority;
+          "Severity", Severity.to_string severity;
           "Tags", String.concat ", " tags ];
     in
     badd buf "Original bug information" info;
@@ -371,7 +393,7 @@ module Issue = struct
     badd buf "Additional information" additional_information;
     Buffer.contents buf
 
-  let labels ~priority:_ ~category:_ ~status:_ =
+  let labels ~priority:_ ~severity:_ ~category:_ ~status:_ ~resolution:_ =
     []
 
   let milestone ~target_version:_ =
@@ -382,6 +404,7 @@ module Issue = struct
         id;
         summary;
         priority;
+        severity;
         category;
         date_submitted;
         last_updated;
@@ -396,16 +419,17 @@ module Issue = struct
         notes;
         status;
         closed_at;
-        resolution = _;
-        related = _;
+        resolution;
+        related;
         tags;
       }
     =
     let body =
       body ~id ?reporter ~tags ~category ~version ~target_version ~fixed_in_version
-        ~description ~steps_to_reproduce ~additional_information
+        ~priority ~severity
+        ~description ~steps_to_reproduce ~additional_information ~related
     in
-    let labels = labels ~priority ~category ~status in
+    let labels = labels ~priority ~severity ~category ~status ~resolution in
     let milestone = milestone ~target_version in
     let closed = Status.is_closed status in
     let closed_at =
@@ -576,12 +600,12 @@ let main dbd =
     Hashtbl.of_list r
   in
   let query =
-    "SELECT id, summary, priority, category_id, date_submitted, last_updated, \
+    "SELECT id, summary, priority, severity, category_id, date_submitted, last_updated, \
      reporter_id, handler_id, bug_text_id, version, target_version, fixed_in_version, status, \
      resolution FROM mantis_bug_table ORDER BY id;"
   in
   let f = function
-    | [|Some id; Some summary; Some priority; Some category_id;
+    | [|Some id; Some summary; Some priority; Some severity; Some category_id;
         Some date_submitted; Some last_updated; Some reporter_id;
         Some handler_id; Some bug_text_id; Some version; Some target_version;
         Some fixed_in_version; Some status; Some resolution|] ->
@@ -604,8 +628,10 @@ let main dbd =
         let resolution = Resolution.of_int (int_of_string resolution) in
         let related = List.sort Stdlib.compare (Hashtbl.find_all relationships id) in
         let tags = Hashtbl.find_all tags id in
+        let priority = Priority.of_int (int_of_string priority) in
+        let severity = Severity.of_int (int_of_string severity) in
         id,
-        { Issue.id; summary; priority; category;
+        { Issue.id; summary; priority; severity; category;
           date_submitted = timestamp date_submitted;
           last_updated = timestamp last_updated; reporter; handler;
           description; steps_to_reproduce; additional_information;
