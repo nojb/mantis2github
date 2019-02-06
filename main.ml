@@ -277,6 +277,7 @@ module Issue = struct
       closed_at: string option;
       resolution: Resolution.t;
       related: int list;
+      tags: string list;
     }
 
   let fence = String.make 6 '`'
@@ -322,6 +323,7 @@ module Issue = struct
         closed_at;
         resolution = _;
         related = _;
+        tags = _;
       }
     =
     let body = body ~id ?reporter ~description ~steps_to_reproduce ~additional_information in
@@ -466,6 +468,33 @@ let main dbd =
     List.iter (fun (id, x) -> Hashtbl.add h id x; Hashtbl.add h x id) r;
     h
   in
+  let all_tags =
+    let f = function
+      | [|Some tag_id; Some name|] ->
+          int_of_string tag_id, name
+      | _ ->
+          failwith "Unexpected response when querying tags"
+    in
+    let r =
+      exec dbd ~f
+        "SELECT tag_id, name FROM mantis_tag_table;"
+    in
+    Hashtbl.of_list r
+  in
+  let tags =
+    let f = function
+      | [|Some bug_id; Some tag_id|] ->
+          int_of_string bug_id, int_of_string tag_id
+      | _ ->
+          failwith "Unexpected response when querying tags"
+    in
+    let r =
+      exec dbd ~f
+        "SELECT bug_id, tag_id FROM mantis_bug_tag_table;"
+    in
+    let r = List.map (fun (bug_id, tag_id) -> bug_id, Hashtbl.find all_tags tag_id) r in
+    Hashtbl.of_list r
+  in
   let query =
     "SELECT id, summary, priority, category_id, date_submitted, last_updated, \
      reporter_id, handler_id, bug_text_id, version, target_version, fixed_in_version, status, \
@@ -494,13 +523,14 @@ let main dbd =
         in
         let resolution = Resolution.of_int (int_of_string resolution) in
         let related = List.sort Stdlib.compare (Hashtbl.find_all relationships id) in
+        let tags = Hashtbl.find_all tags id in
         id,
         { Issue.id; summary; priority; category;
           date_submitted = timestamp date_submitted;
           last_updated = timestamp last_updated; reporter; handler;
           description; steps_to_reproduce; additional_information;
           version; target_version; fixed_in_version;
-          notes; status; closed_at; resolution; related }
+          notes; status; closed_at; resolution; related; tags }
     | _ ->
         failwith "Unexpected response when querying bugs"
   in
