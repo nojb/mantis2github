@@ -69,7 +69,7 @@ module Curl = struct
 
   module J = Yojson.Basic.Util
 
-  let curl ?(x = "GET") ?(headers = []) ?data ?(params = []) {owner; repo; token} route =
+  let curl meth ?(headers = []) ?data ?(params = []) {owner; repo; token} route =
     let headers =
       match token with
       | Some token -> ("Authorization", "token " ^ token) :: headers
@@ -100,7 +100,7 @@ module Curl = struct
     in
     let cmd =
       Printf.sprintf "curl -Ss %s%s-X %s %s/repos/%s/%s/%s%s"
-        data headers x root owner repo route params
+        data headers meth root owner repo route params
     in
     Printf.eprintf "+ %s\n%!" cmd;
     let tmp = Filename.temp_file "curl" "out" in
@@ -115,17 +115,20 @@ module Curl = struct
     | _ ->
         json
 
+  let get ?headers ?params gh route = curl "GET" ?headers ?params gh route
+  let post ?headers ?data gh route = curl "POST" ?headers ?data gh route
+
   let list_milestones gh =
     let f json =
       let title = json |> J.member "title" |> J.to_string in
       let number = json |> J.member "number" |> J.to_int in
       Some (title, number)
     in
-    curl ~params:["state", "all"] gh "milestones" |> J.to_list |> J.filter_map f
+    get ~params:["state", "all"] gh "milestones" |> J.to_list |> J.filter_map f
 
   let is_imported gh id =
     let route = Printf.sprintf "import/issues/%d" id in
-    match curl gh route |> J.member "status" |> J.to_string with
+    match get gh route |> J.member "status" |> J.to_string with
     | "imported" -> true
     | "failed" -> failwith "Import failed!"
     | _ -> false
@@ -133,7 +136,7 @@ module Curl = struct
   let start_import gh json =
     let data = Yojson.Basic.pretty_to_string json in
     Printf.eprintf "%s\n%!" data;
-    curl ~x:"POST" ~data gh "import/issues" |> J.member "id" |> J.to_int
+    post ~data gh "import/issues" |> J.member "id" |> J.to_int
 end
 
 module Status = struct
