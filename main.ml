@@ -699,7 +699,7 @@ let default_cmd =
   Term.(ret (const (fun _ -> `Help (`Pager, None)) $ const ())),
   Term.info "mantis2github" ~version:"v0.1" ~doc ~sdocs ~exits
 
-let cmds = [extract_cmd; milestones_cmd; create_issue_cmd]
+let cmds = [extract_cmd; milestones_cmd; create_issue_cmd; migrate_cmd]
 
 let () =
   Term.(exit (eval_choice default_cmd cmds))
