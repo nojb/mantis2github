@@ -151,6 +151,56 @@ module Curl = struct
     loop 1
 end
 
+module Labels = struct
+  type t =
+    | Duplicate
+    | No_change_required
+    | Unable_to_reproduce
+    | Wontfix
+
+  let to_string = function
+    | Duplicate -> "duplicate"
+    | No_change_required -> "no change required"
+    | Unable_to_reproduce -> "unable to reproduce"
+    | Wontfix -> "wontfix"
+end
+
+module Resolution = struct
+  type t =
+    | Open
+    | Fixed
+    | Reopened
+    | Unable_to_duplicate
+    | Not_fixable
+    | Duplicate
+    | Not_a_bug
+    | Suspended
+    | Wont_fix
+
+  let to_int = function
+    | Open -> 10
+    | Fixed -> 20
+    | Reopened -> 30
+    | Unable_to_duplicate -> 40
+    | Not_fixable -> 50
+    | Duplicate -> 60
+    | Not_a_bug -> 70
+    | Suspended -> 80
+    | Wont_fix -> 90
+
+  let of_int = function
+    | 10 -> Open
+    | 20 -> Fixed
+    | 30 -> Reopened
+    | 40 -> Unable_to_duplicate
+    | 50 -> Not_fixable
+    | 60 -> Duplicate
+    | 70 -> Not_a_bug
+    | 80 -> Suspended
+    | 90 -> Wont_fix
+    | n -> Printf.ksprintf failwith "Unexpected resolution code: %d" n
+end
+
 module Status = struct
   type t =
     | New
@@ -169,7 +219,7 @@ module Status = struct
     | 50 -> Assigned
     | 80 -> Resolved
     | 90 -> Closed
-    | n -> failwith (Printf.sprintf "Unexpected status code: %d" n)
+    | n -> Printf.ksprintf failwith "Unexpected status code: %d" n
 
   let to_string = function
     | New -> "new"
@@ -219,10 +269,13 @@ module Issue = struct
       description: string;
       steps_to_reproduce: string;
       additional_information: string;
+      version: string;
       target_version: string;
+      fixed_in_version: string;
       notes: Note.t list;
       status: Status.t;
       closed_at: string option;
+      resolution: Resolution.t;
     }
 
   let fence = String.make 6 '`'
@@ -260,10 +313,13 @@ module Issue = struct
         description;
         steps_to_reproduce;
         additional_information;
+        version = _;
         target_version;
+        fixed_in_version = _;
         notes;
         status;
         closed_at;
+        resolution = _;
       }
     =
     let body = body ~id ?reporter ~description ~steps_to_reproduce ~additional_information in
@@ -394,14 +450,14 @@ let main dbd =
   in
   let query =
     "SELECT id, summary, priority, category_id, date_submitted, last_updated, \
-     reporter_id, handler_id, bug_text_id, target_version, status \
-     FROM mantis_bug_table ORDER BY id;"
+     reporter_id, handler_id, bug_text_id, version, target_version, fixed_in_version, status, \
+     resolution FROM mantis_bug_table ORDER BY id;"
   in
   let f = function
     | [|Some id; Some summary; Some priority; Some category_id;
         Some date_submitted; Some last_updated; Some reporter_id;
-        Some handler_id; Some bug_text_id; Some target_version;
-        Some status|] ->
+        Some handler_id; Some bug_text_id; Some version; Some target_version;
+        Some fixed_in_version; Some status; Some resolution|] ->
         let id = int_of_string id in
         let category = Hashtbl.find categories (int_of_string category_id) in
         let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
@@ -418,12 +474,14 @@ let main dbd =
               assert (st = status);
               if Status.is_closed status then Some closed_at else None
         in
+        let resolution = Resolution.of_int (int_of_string resolution) in
         id,
         { Issue.id; summary; priority; category;
           date_submitted = timestamp date_submitted;
           last_updated = timestamp last_updated; reporter; handler;
-          description; steps_to_reproduce; additional_information; target_version;
-          notes; status; closed_at }
+          description; steps_to_reproduce; additional_information;
+          version; target_version; fixed_in_version;
+          notes; status; closed_at; resolution }
     | _ ->
         failwith "Unexpected response when querying bugs"
   in
