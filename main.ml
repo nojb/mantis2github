@@ -169,12 +169,20 @@ module Labels = struct
     | No_change_required
     | Unable_to_reproduce
     | Wontfix
+    | Critical
+    | High_priority
+    | Low_priority
+    | Suspended
 
   let to_string = function
     | Duplicate -> "duplicate"
     | No_change_required -> "no change required"
     | Unable_to_reproduce -> "unable to reproduce"
     | Wontfix -> "wontfix"
+    | Critical -> "critical"
+    | High_priority -> "high priority"
+    | Low_priority -> "low priority"
+    | Suspended -> "suspended"
 end
 
 module Priority = struct
@@ -202,6 +210,12 @@ module Priority = struct
     | High -> "high"
     | Urgent -> "urgent"
     | Immediate -> "immediate"
+
+  let to_labels = function
+    | None | Normal -> []
+    | Low -> [Labels.Low_priority]
+    | High | Urgent -> [Labels.High_priority]
+    | Immediate -> [Labels.Critical]
 end
 
 module Severity = struct
@@ -235,6 +249,12 @@ module Severity = struct
     | Major -> "major"
     | Crash -> "crash"
     | Block -> "block"
+
+  let to_labels = function
+    | Feature | Trivial | Tweak | Minor -> Labels.[Low_priority]
+    | Text -> []
+    | Major | Crash -> Labels.[High_priority]
+    | Block -> Labels.[Critical]
 end
 
 module Resolution = struct
@@ -271,6 +291,15 @@ module Resolution = struct
     | 80 -> Suspended
     | 90 -> Wont_fix
     | n -> Printf.ksprintf failwith "Unexpected resolution code: %d" n
+
+  let to_labels = function
+    | Open | Fixed | Reopened -> []
+    | Unable_to_duplicate -> [Labels.Unable_to_reproduce]
+    | Duplicate -> [Labels.Duplicate]
+    | Not_a_bug -> [Labels.No_change_required]
+    | Suspended -> [Labels.Suspended]
+    | Wont_fix -> [Labels.Wontfix]
+    | Not_fixable -> []
 end
 
 module Status = struct
@@ -393,8 +422,12 @@ module Issue = struct
     badd buf "Additional information" additional_information;
     Buffer.contents buf
 
-  let labels ~priority:_ ~severity:_ ~category:_ ~status:_ ~resolution:_ =
-    []
+  let labels ~priority ~severity ~category:_ ~status:_ ~resolution:_ =
+    let l =
+      Priority.to_labels priority @
+      Severity.to_labels severity
+    in
+    List.sort Stdlib.compare l |> List.map Labels.to_string
 
   let milestone ~target_version:_ =
     None
@@ -460,7 +493,7 @@ module Issue = struct
         "created_at", `String date_submitted;
         "updated_at", `String last_updated;
         "closed", `Bool closed;
-        "labels", `List labels;
+        "labels", `List (List.map (fun s -> `String s) labels);
       ]
     in
     let comments = List.map Note.to_json notes in
