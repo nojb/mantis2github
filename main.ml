@@ -137,6 +137,18 @@ module Curl = struct
     let data = Yojson.Basic.pretty_to_string json in
     Printf.eprintf "%s\n%!" data;
     post ~data gh "import/issues" |> J.member "id" |> J.to_int
+
+  let create_issue gh json =
+    let id = start_import gh json in
+    let rec loop n =
+      if is_imported gh id then prerr_endline "Done!"
+      else begin
+        Printf.eprintf "Waiting %ds" n;
+        Unix.sleep n;
+        loop (2 * n)
+      end
+    in
+    loop 1
 end
 
 module Status = struct
@@ -434,18 +446,9 @@ let milestones gh =
   let l = Curl.list_milestones gh in
   List.iter print_endline (List.map fst l)
 
-let create_issue gh issue =
-  let id = Curl.start_import gh (Issue.to_json issue) in
-  let rec loop () =
-    Unix.sleep 1;
-    if Curl.is_imported gh id then prerr_endline "Done!"
-    else (prerr_endline "Waiting..."; loop ())
-  in
-  loop ()
-
 let create_issues gh db bug_ids =
   let issues = Hashtbl.of_list (fetch db) in
-  List.iter (fun id -> create_issue gh (Hashtbl.find issues id)) bug_ids
+  List.iter (fun id -> Curl.create_issue gh (Issue.to_json (Hashtbl.find issues id))) bug_ids
 
 open Cmdliner
 
