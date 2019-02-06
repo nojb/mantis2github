@@ -238,6 +238,11 @@ module Status = struct
     `String (to_string st)
 end
 
+let badd buf title s =
+  let fence = String.make 6 '`' in
+  let s = String.trim s in
+  if s <> "" then Printf.bprintf buf "**%s**\n%s\n%s\n%s\n" title fence s fence
+
 module Note = struct
   type t =
     {
@@ -247,7 +252,14 @@ module Note = struct
       date_submitted: string;
     }
 
-  let to_json {reporter = _; text; last_modified = _; date_submitted} =
+  let to_json {reporter; text; last_modified = _; date_submitted} =
+    let reporter = match reporter with None -> "" | Some s -> s in
+    let text =
+      let buf = Buffer.create 101 in
+      badd buf "Reporter" reporter;
+      badd buf "Body" text;
+      Buffer.contents buf
+    in
     `Assoc
       [
         "body", `String text;
@@ -280,29 +292,26 @@ module Issue = struct
       tags: string list;
     }
 
-  let fence = String.make 6 '`'
-
   let body ~id ?(reporter = "") ~tags ~category
       ~description ~steps_to_reproduce ~additional_information
     =
     let buf = Buffer.create 101 in
-    let add1 title s =
-      let s = String.trim s in
-      if s <> "" then Printf.bprintf buf "%s: %s\n" title s
+    let info =
+      let combine l =
+        let l = List.map (fun (s1, s2) -> (s1, String.trim s2)) l in
+        let l = List.filter (function (_, "") -> false | _ -> true) l in
+        String.concat "\n" (List.map (fun (s1, s2) -> s1 ^ ": " ^ s2) l)
+      in
+      combine
+        [ "ID", Printf.sprintf "%07d" id;
+          "Reporter", reporter;
+          "Category", category;
+          "Tags", String.concat ", " tags ];
     in
-    let add title s =
-      let s = String.trim s in
-      if s <> "" then Printf.bprintf buf "%s:\n\n%s\n" title s
-    in
-    Printf.bprintf buf "%s\n" fence;
-    add1 "ID" (Printf.sprintf "%07d" id);
-    add1 "Reporter" reporter;
-    add1 "Category" category;
-    add1 "Tags" (String.concat ", " tags);
-    add "Description" description;
-    add "Steps to reproduce" steps_to_reproduce;
-    add "Additional information" additional_information;
-    Printf.bprintf buf "%s\n" fence;
+    badd buf "Original bug information" info;
+    badd buf "Description" description;
+    badd buf "Steps to reproduce" steps_to_reproduce;
+    badd buf "Additional information" additional_information;
     Buffer.contents buf
 
   let labels ~priority:_ ~category:_ ~status:_ =
