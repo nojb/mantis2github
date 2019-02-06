@@ -292,7 +292,7 @@ module Issue = struct
       tags: string list;
     }
 
-  let body ~id ?(reporter = "") ~tags ~category
+  let body ~id ?(reporter = "") ~tags ~category ~version ~target_version ~fixed_in_version
       ~description ~steps_to_reproduce ~additional_information
     =
     let buf = Buffer.create 101 in
@@ -305,6 +305,9 @@ module Issue = struct
       combine
         [ "ID", Printf.sprintf "%07d" id;
           "Reporter", reporter;
+          "Version", version;
+          "Target version", target_version;
+          "Fixed in version", fixed_in_version;
           "Category", category;
           "Tags", String.concat ", " tags ];
     in
@@ -333,9 +336,9 @@ module Issue = struct
         description;
         steps_to_reproduce;
         additional_information;
-        version = _;
+        version;
         target_version;
-        fixed_in_version = _;
+        fixed_in_version;
         notes;
         status;
         closed_at;
@@ -345,7 +348,7 @@ module Issue = struct
       }
     =
     let body =
-      body ~id ?reporter ~tags ~category
+      body ~id ?reporter ~tags ~category ~version ~target_version ~fixed_in_version
         ~description ~steps_to_reproduce ~additional_information
     in
     let labels = labels ~priority ~category ~status in
