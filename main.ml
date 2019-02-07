@@ -754,12 +754,13 @@ let migrate gh db assignee nmax =
           let endtime = Unix.gettimeofday () in
           let delta = endtime -. starttime in
           let total = total +. delta in
-          let id, count =
+          let id =
             match res with
-            | Some id -> string_of_int id, succ count
-            | None -> "ERR", count
+            | Some id -> string_of_int id
+            | None -> "ERR"
           in
-          Printf.printf "%4d %4s %6.1f %6.1f\n%!" issue.Issue.id id delta total;
+          let count = succ count in
+          Printf.printf "%4d %4s %6.1f %6.1f %6.1f\n%!" issue.Issue.id id delta (total /. count) total;
           loop total count (succ idx)
     end
   in
