@@ -13,4 +13,4 @@ all:
 
 .PHONY: migrate
 migrate: all
-	$(PROG) --owner $(OWNER) --repo $(REPO) --token $(TOKEN) --from $(FROM) 2> err.txt | tee out.txt
+	$(PROG) migrate --owner $(OWNER) --repo $(REPO) --token $(TOKEN) --from $(FROM) 2> err.txt | tee out.txt
