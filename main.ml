@@ -428,7 +428,7 @@ module Issue = struct
       Severity.to_labels severity @
       Resolution.to_labels resolution
     in
-    List.sort Stdlib.compare l |> List.map Labels.to_string
+    List.sort_uniq Stdlib.compare l |> List.map Labels.to_string
 
   let milestone ~target_version:_ =
     None
