@@ -196,6 +196,10 @@ module Labels = struct
     | High_priority
     | Low_priority
     | Suspended
+    | Feature
+    | Tweak
+    | Crash
+    | Block
 
   let to_string = function
     | Duplicate -> "duplicate"
@@ -206,6 +210,10 @@ module Labels = struct
     | High_priority -> "high priority"
     | Low_priority -> "low priority"
     | Suspended -> "suspended"
+    | Feature -> "feature"
+    | Tweak -> "tweak"
+    | Crash -> "crash"
+    | Block -> "block"
 end
 
 module Priority = struct
@@ -274,10 +282,11 @@ module Severity = struct
     | Block -> "block"
 
   let to_labels = function
-    | Feature | Trivial | Tweak | Minor -> Labels.[Low_priority]
-    | Text -> []
-    | Major | Crash -> Labels.[High_priority]
-    | Block -> Labels.[Critical]
+    | Feature -> Labels.[Feature]
+    | Tweak | Trivial | Minor -> Labels.[Tweak]
+    | Text | Major -> []
+    | Crash -> Labels.[Crash]
+    | Block -> Labels.[Block]
 end
 
 module Resolution = struct
