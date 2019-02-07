@@ -43,26 +43,44 @@ let oint s o l =
   | Some x -> (s, `Int x) :: l
   | None -> l
 
-let user_map =
-  let h = Hashtbl.create 17 in
-  let ic = open_in "user_map.txt" in
-  let rec loop () =
-    match String.trim (input_line ic) with
-    | s when s = "" || s.[0] = '#' ->
-        loop ()
-    | s ->
-        let s1, s2 =
-          try
-            Scanf.sscanf s "%S %s%!" (fun s1 s2 -> s1, s2)
-          with _ ->
-            failwith (Printf.sprintf "Error while parsing users map: %S" s)
-        in
-        Hashtbl.add h s1 s2;
-        loop ()
-    | exception End_of_file ->
-        h
-  in
-  loop ()
+(* This file contains a mapping between Mantis user names and GH usernames.
+
+   Names appearing on this list are susceptible of being assigned migrated
+   issues. They must have sufficient permissions to do so and be a subset of
+   caml-devel subscribers. *)
+let gh_user = function
+  | "administrator" -> "bactrian"
+  | "xleroy" -> "xavierleroy"
+  (* | "remy" -> "diremy" *)
+  | "doligez" -> "damiendoligez"
+  | "garrigue" -> "garrigue"
+  | "frisch" -> "alainfrisch"
+  | "weis" -> "pierreweis"
+  (* | "mauny" -> "mauny" *)
+  | "avsm" -> "avsm"
+  | "dra" -> "dra27"
+  (* | "fpottier" -> "fpottier" *)
+  | "maranget" -> "maranget"
+  | "Sebastien_Hinderer"  | "shindere" -> "shindere"
+  | "yallop" -> "yallop"
+  | "chambart" -> "chambart"
+  | "shinwell" -> "mshinwell"
+  | "lefessan" -> "lefessan"
+  (* | "protz" -> "protz" *)
+  | "lpw25" -> "lpw25"
+  | "gasche" -> "gasche"
+  (* | "hongboz" -> "bobzhang" *)
+  (* | "jacques-henri.jourdan" -> "jhjourdan" *)
+  | "def" -> "let-def"
+  | "stedolan" -> "stedolan"
+  | "trefis" -> "trefis"
+  | "damien" -> "damiendoligez"
+  | "nojb" | "nojebar" -> "nojb"
+  | "octachron" -> "Octachron"
+  | "Armael" -> "Armael"
+  | "dim" -> "diml"
+  (* | "guesdon" -> "zoggy" *)
+  | _ -> raise Not_found
 
 type gh =
   {
@@ -510,7 +528,7 @@ module Issue = struct
     let handler =
       match handler with
       | Some s ->
-          Hashtbl.find_opt user_map s
+          begin try Some (gh_user s) with Not_found -> None end
       | None ->
           None
     in
