@@ -719,12 +719,23 @@ let fetch db =
       Mysql.disconnect dbd;
       exit 2
 
-let extract db =
-  let f (_, issue) =
-    let json = Issue.to_json issue in
-    Printf.printf "%a\n" (Yojson.pretty_to_channel ~std:true) json
-  in
-  List.iter f (fetch db)
+let extract db = function
+  | [] ->
+      let f (_, issue) =
+        let json = Issue.to_json issue in
+        Printf.printf "%a\n" (Yojson.pretty_to_channel ~std:true) json
+      in
+      List.iter f (fetch db)
+  | bug_ids ->
+      let issues = Hashtbl.of_list (fetch db) in
+      List.iter (fun id ->
+          match Hashtbl.find_opt issues id with
+          | None ->
+              Printf.eprintf "No Mantis issue found with id %d\n%!" id
+          | Some issue ->
+              let json = Issue.to_json issue in
+              Printf.printf "%a\n%!" (Yojson.pretty_to_channel ~std:true) json
+        ) bug_ids
 
 let milestones gh =
   match Curl.list_milestones gh with
@@ -795,10 +806,14 @@ let db_t =
   in
   Term.(const db $ dbhost $ dbname $ dbport $ dbpwd $ dbuser)
 
+let bug_ids_t =
+  let doc = "Mantis bug numbers." in
+  Arg.(value & pos_all int [] & info [] ~doc)
+
 let extract_cmd =
   let doc = "Extract Mantis into JSON" in
   let exits = Term.default_exits in
-  Term.(const extract $ db_t),
+  Term.(const extract $ db_t $ bug_ids_t),
   Term.info "extract" ~doc ~sdocs:Manpage.s_common_options ~exits
 
 let github_t =
@@ -822,10 +837,6 @@ let milestones_cmd =
   let doc = "List milestones in ocaml/ocaml" in
   Term.(const milestones $ github_t),
   Term.info "milestones" ~doc
-
-let bug_ids_t =
-  let doc = "Mantis bug numbers." in
-  Arg.(value & pos_all int [] & info [] ~doc)
 
 let create_issue_cmd =
   let doc = "Create an issue." in
