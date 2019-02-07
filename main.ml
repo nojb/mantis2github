@@ -23,8 +23,6 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
-module J = Yojson.Basic.Util
-
 let extract db = function
   | [] ->
       let f (_, issue) =
