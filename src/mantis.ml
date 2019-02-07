@@ -429,6 +429,13 @@ module Issue = struct
 end
 
 let exec dbd ~f query =
+  let f arr =
+    let extract = function
+      | Some x -> x
+      | None -> Printf.ksprintf failwith "Unexpected result: %S" query
+    in
+    f (Array.map extract arr)
+  in
   Mysql.map (Mysql.exec dbd query) ~f
 
 let timestamp s =
@@ -442,7 +449,7 @@ let main dbd =
   let categories =
     let r =
       let f = function
-        | [|Some id; Some name|] ->
+        | [|id; name|] ->
             int_of_string id, name
         | _ ->
             failwith "Unexpected response when querying categories"
@@ -454,7 +461,7 @@ let main dbd =
   let users =
     let r =
       let f = function
-        | [|Some id; Some user_name|] ->
+        | [|id; user_name|] ->
             int_of_string id, user_name
         | _ ->
             failwith "Unexpected response when querying users"
@@ -466,7 +473,7 @@ let main dbd =
   let texts =
     let r =
       let f = function
-        | [|Some id; Some description; Some steps_to_reproduce; Some additional_information|] ->
+        | [|id; description; steps_to_reproduce; additional_information|] ->
             int_of_string id, (description, steps_to_reproduce, additional_information)
         | _ ->
             failwith "Unexpected response when querying bug texts"
@@ -480,10 +487,10 @@ let main dbd =
     let texts =
       let r =
         let f = function
-          | [|Some id; Some note|] ->
+          | [|id; note|] ->
               int_of_string id, note
           | _ ->
-              failwith "Unexpected response when querying notes texts"
+              assert false
         in
         exec dbd ~f "SELECT id, note FROM mantis_bugnote_text_table;"
       in
@@ -491,15 +498,14 @@ let main dbd =
     in
     let r =
       let f = function
-        | [|Some bug_id; Some reporter_id; Some bugnote_text_id;
-            Some last_modified; Some date_submitted|] ->
+        | [|bug_id; reporter_id; bugnote_text_id; last_modified; date_submitted|] ->
             let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
             let text = Hashtbl.find texts (int_of_string bugnote_text_id) in
             let last_modified = timestamp last_modified in
             let date_submitted = timestamp date_submitted in
             int_of_string bug_id, {Note.reporter; text; last_modified; date_submitted}
         | _ ->
-            failwith "Unexpected response when querying notes"
+            assert false
       in
       exec dbd ~f "SELECT bug_id, reporter_id, bugnote_text_id, \
                    last_modified, date_submitted \
@@ -510,11 +516,11 @@ let main dbd =
   let statuses =
     let r =
       let f = function
-        | [|Some bug_id; Some date_modified; Some new_value|] ->
+        | [|bug_id; date_modified; new_value|] ->
             int_of_string bug_id,
             (timestamp date_modified, Status.of_int (int_of_string new_value))
         | _ ->
-            failwith "Unexpected response when querying history"
+            assert false
       in
       exec dbd ~f
         "SELECT bug_id, date_modified, new_value FROM mantis_bug_history_table \
@@ -526,10 +532,10 @@ let main dbd =
   in
   let relationships =
     let f = function
-      | [|Some source_bug_id; Some destination_bug_id|] ->
+      | [|source_bug_id; destination_bug_id|] ->
           int_of_string source_bug_id, int_of_string destination_bug_id
       | _ ->
-          failwith "Unexpected response when querying relationships"
+          assert false
     in
     let r =
       exec dbd ~f
@@ -541,23 +547,25 @@ let main dbd =
     h
   in
   let all_tags =
-    let f = function
-      | [|Some tag_id; Some name|] ->
-          int_of_string tag_id, name
-      | _ ->
-          failwith "Unexpected response when querying tags"
+    let r =
+      let f = function
+        | [|tag_id; name|] ->
+            int_of_string tag_id, name
+        | _ ->
+            assert false
+      in
+      exec dbd ~f "SELECT id, name FROM mantis_tag_table;"
     in
-    let r = exec dbd ~f "SELECT id, name FROM mantis_tag_table;" in
     Hashtbl.of_list r
   in
   let tags =
-    let f = function
-      | [|Some bug_id; Some tag_id|] ->
-          int_of_string bug_id, int_of_string tag_id
-      | _ ->
-          failwith "Unexpected response when querying tags"
-    in
     let r =
+      let f = function
+        | [|bug_id; tag_id|] ->
+            int_of_string bug_id, int_of_string tag_id
+        | _ ->
+            failwith "Unexpected response when querying tags"
+      in
       exec dbd ~f
         "SELECT bug_id, tag_id FROM mantis_bug_tag_table;"
     in
@@ -570,10 +578,10 @@ let main dbd =
      resolution FROM mantis_bug_table ORDER BY id;"
   in
   let f = function
-    | [|Some id; Some summary; Some priority; Some severity; Some category_id;
-        Some date_submitted; Some last_updated; Some reporter_id;
-        Some handler_id; Some bug_text_id; Some version; Some target_version;
-        Some fixed_in_version; Some status; Some resolution|] ->
+    | [|id; summary; priority; severity; category_id;
+        date_submitted; last_updated; reporter_id;
+        handler_id; bug_text_id; version; target_version;
+        fixed_in_version; status; resolution|] ->
         let id = int_of_string id in
         let category = Hashtbl.find categories (int_of_string category_id) in
         let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
