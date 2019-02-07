@@ -452,7 +452,7 @@ let main dbd =
         | [|id; name|] ->
             int_of_string id, name
         | _ ->
-            failwith "Unexpected response when querying categories"
+            assert false
       in
       exec dbd ~f "SELECT id, name FROM mantis_category_table;"
     in
@@ -464,7 +464,7 @@ let main dbd =
         | [|id; user_name|] ->
             int_of_string id, user_name
         | _ ->
-            failwith "Unexpected response when querying users"
+            assert false
       in
       exec dbd ~f "SELECT id, username FROM mantis_user_table;"
     in
@@ -476,7 +476,7 @@ let main dbd =
         | [|id; description; steps_to_reproduce; additional_information|] ->
             int_of_string id, (description, steps_to_reproduce, additional_information)
         | _ ->
-            failwith "Unexpected response when querying bug texts"
+            assert false
       in
       exec dbd ~f "SELECT id, description, steps_to_reproduce, additional_information \
                    FROM mantis_bug_text_table;"
@@ -564,7 +564,7 @@ let main dbd =
         | [|bug_id; tag_id|] ->
             int_of_string bug_id, int_of_string tag_id
         | _ ->
-            failwith "Unexpected response when querying tags"
+            assert false
       in
       exec dbd ~f
         "SELECT bug_id, tag_id FROM mantis_bug_tag_table;"
@@ -611,7 +611,7 @@ let main dbd =
           version; target_version; fixed_in_version;
           notes; status; closed_at; resolution; related; tags }
     | _ ->
-        failwith "Unexpected response when querying bugs"
+        assert false
   in
   exec dbd ~f query
 
