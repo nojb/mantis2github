@@ -96,17 +96,17 @@ end
 
 module Milestone = struct
   let list ?verbose ?token ~owner ~repo () =
-    let f json =
-      let title = json |> J.member "title" |> J.to_string in
-      let number = json |> J.member "number" |> J.to_int in
-      Some (title, number)
-    in
     let params = ["state", "all"] in
     match Api.get ?verbose ~params ?token "/repos/%s/%s/milestones" owner repo with
     | Error json ->
         Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
         None
     | Ok json ->
+        let f json =
+          let title = json |> J.member "title" |> J.to_string in
+          let number = json |> J.member "number" |> J.to_int in
+          Some (title, number)
+        in
         Some (json |> J.to_list |> J.filter_map f)
 end
 
