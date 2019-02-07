@@ -643,20 +643,20 @@ let extract db = function
               Printf.printf "%a\n%!" (Yojson.pretty_to_channel ~std:true) json
         ) bug_ids
 
-let milestones gh =
-  match Github.Milestone.list gh with
+let milestones (token, owner, repo) =
+  match Github.Milestone.list ?token ~owner ~repo () with
   | Some l ->
       List.iter print_endline (List.map fst l)
   | None ->
       ()
 
-let create_issues gh db bug_ids =
+let create_issues (token, owner, repo) db bug_ids =
   let issues = Hashtbl.of_list (fetch db) in
   List.iter (fun id ->
-      ignore (Github.Issue.import gh (Issue.to_json (Hashtbl.find issues id)))
+      ignore (Github.Issue.import ?token ~owner ~repo (Issue.to_json (Hashtbl.find issues id)))
     ) bug_ids
 
-let migrate verbose gh db assignee from nmax =
+let migrate verbose (token, owner, repo) db assignee from nmax =
   let issues = Hashtbl.of_list (fetch db) in
   let n = Hashtbl.length issues in
   let rec loop total_retries total count idx =
@@ -667,7 +667,10 @@ let migrate verbose gh db assignee from nmax =
           loop total_retries total count (succ idx)
       | Some issue ->
           let starttime = Unix.gettimeofday () in
-          let res = Github.Issue.import ~verbose gh (Issue.to_json ?assignee issue) in
+          let res =
+            Github.Issue.import ~verbose ?token ~owner ~repo
+              (Issue.to_json ?assignee issue)
+          in
           let endtime = Unix.gettimeofday () in
           let delta = endtime -. starttime in
           let total = total +. delta in
@@ -744,7 +747,7 @@ let github_t =
     let doc = "Github token." in
     Arg.(value & opt (some string) None & info ["token"] ~docs ~doc)
   in
-  let github owner repo token = {Github.owner; repo; token} in
+  let github owner repo token = (token, owner, repo) in
   Term.(const github $ owner $ repo $ token)
 
 let milestones_cmd =

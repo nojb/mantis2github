@@ -25,17 +25,18 @@
 
 module J = Yojson.Basic.Util
 
-type t =
-  {
-    owner: string;
-    repo: string;
-    token: string option;
-  }
-
 module Api = struct
+  type t =
+    | POST
+    | GET
+
+  let to_string = function
+    | GET -> "GET"
+    | POST -> "POST"
+
   let root = "https://api.github.com"
 
-  let curl ?(verbose = false) meth ?(headers = []) ?data ?(params = []) {owner; repo; token} route =
+  let curl meth ?(verbose = false) ?(headers = []) ?data ?(params = []) ?token route =
     let headers =
       match token with
       | Some token -> ("Authorization", "token " ^ token) :: headers
@@ -67,8 +68,8 @@ module Api = struct
         | l -> "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
       in
       let verbose = if verbose then "--verbose " else "" in
-      Printf.sprintf "curl -Ss %s%s%s-X %s %s/repos/%s/%s/%s%s"
-        verbose data headers meth root owner repo route params
+      Printf.sprintf "curl -Ss %s%s%s-X %s %s%s%s"
+        verbose data headers (to_string meth) root route params
     in
     if verbose then Printf.eprintf "+ %s\n%!" cmd;
     let tmp = Filename.temp_file "curl" "out" in
@@ -86,18 +87,21 @@ module Api = struct
     | _ ->
         Ok json
 
-  let get ?verbose ?headers ?params gh route = curl ?verbose "GET" ?headers ?params gh route
-  let post ?verbose ?headers ?data gh route = curl ?verbose "POST" ?headers ?data gh route
+  let get ?verbose ?headers ?params ?token fmt =
+    Printf.ksprintf (curl GET ?verbose ?headers ?params ?token) fmt
+  let post ?verbose ?headers ?data ?token fmt =
+    Printf.ksprintf (curl POST ?verbose ?headers ?data ?token) fmt
 end
 
 module Milestone = struct
-  let list ?verbose gh =
+  let list ?verbose ?token ~owner ~repo () =
     let f json =
       let title = json |> J.member "title" |> J.to_string in
       let number = json |> J.member "number" |> J.to_int in
       Some (title, number)
     in
-    match Api.get ?verbose ~params:["state", "all"] gh "milestones" with
+    let params = ["state", "all"] in
+    match Api.get ?verbose ~params ?token "/repos/%s/%s/milestones" owner repo with
     | Error json ->
         Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
         None
@@ -106,8 +110,8 @@ module Milestone = struct
 end
 
 module Issue = struct
-  let is_imported ?verbose gh id =
-    match Api.get ?verbose gh (Printf.sprintf "import/issues/%d" id) with
+  let is_imported ?verbose ?token ~repo ~owner id =
+    match Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id with
     | Error _ as x -> Some x
     | Ok json ->
         begin match json |> J.member "status" |> J.to_string with
@@ -128,20 +132,20 @@ module Issue = struct
             None
         end
 
-  let start_import ?verbose gh json =
-    match Api.post ?verbose ~data:json gh "import/issues" with
+  let start_import ?verbose ?token ~repo ~owner json =
+    match Api.post ?verbose ~data:json ?token "/repos/%s/%s/import/issues" owner repo with
     | Ok json -> Ok (json |> J.member "id" |> J.to_int)
     | Error _ as x -> x
 
-  let import ?verbose gh json =
-    match start_import ?verbose gh json with
+  let import ?verbose ?token ~repo ~owner json =
+    match start_import ?verbose ?token ~repo ~owner json with
     | Error json ->
         Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
         Error 0
     | Ok id ->
         let rec loop n retries =
           Unix.sleep n;
-          match is_imported ?verbose gh id with
+          match is_imported ?verbose ?token ~repo ~owner id with
           | Some (Ok id) -> Ok (id, retries)
           | Some (Error json_err) ->
               let json = `Assoc ["issue", json; "error", json_err] in
@@ -171,9 +175,9 @@ module Gist = struct
              "description", `String description;
              "public", `Bool public ]
 
-  let create ?verbose gh gist =
+  let create ?verbose ?token gist =
     let data = to_json gist in
-    match Api.post ?verbose ~data gh "/gists" with
+    match Api.post ?verbose ~data ?token "/gists" with
     | Ok json ->
         Ok (J.member "html_url" json |> J.to_string)
     | Error _ as x ->
