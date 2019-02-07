@@ -82,130 +82,6 @@ let gh_user = function
   (* | "guesdon" -> "zoggy" *)
   | _ -> raise Not_found
 
-type gh =
-  {
-    owner: string;
-    repo: string;
-    token: string option;
-  }
-
-module Curl = struct
-  let root = "https://api.github.com"
-
-  let curl ?(verbose = false) meth ?(headers = []) ?data ?(params = []) {owner; repo; token} route =
-    let headers =
-      match token with
-      | Some token -> ("Authorization", "token " ^ token) :: headers
-      | None -> headers
-    in
-    let headers = ("Accept", "application/vnd.github.golden-comet-preview+json") :: headers in
-    let cmd =
-      let headers =
-        match headers with
-        | [] -> ""
-        | l ->
-          String.concat " "
-            (List.map (fun (k, v) -> "-H \"" ^ k ^ ": " ^ v ^ "\"") l) ^ " "
-      in
-      let data =
-        match data with
-        | None -> ""
-        | Some data ->
-          (* Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) data; *)
-          let filename, oc = Filename.open_temp_file "curl" "data" in
-          set_binary_mode_out oc true;
-          Yojson.Basic.pretty_to_channel ~std:true oc data;
-          close_out oc;
-          "--data-binary @" ^ filename ^ " "
-      in
-      let params =
-        match params with
-        | [] -> ""
-        | l -> "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
-      in
-      let verbose = if verbose then "--verbose " else "" in
-      Printf.sprintf "curl -Ss %s%s%s-X %s %s/repos/%s/%s/%s%s"
-        verbose data headers meth root owner repo route params
-    in
-    if verbose then Printf.eprintf "+ %s\n%!" cmd;
-    let tmp = Filename.temp_file "curl" "out" in
-    assert (Sys.command (Printf.sprintf "%s > %s" cmd tmp) = 0);
-    let ic = open_in_bin tmp in
-    let s = really_input_string ic (in_channel_length ic) in
-    close_in ic;
-    let json = Yojson.Basic.from_string s in
-    (* Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json; *)
-    match J.member "message" json with
-    | `String _ ->
-        let json = ["cmd", `String cmd; "res", json] in
-        let json = match data with None -> json | Some data -> ("data", data) :: json in
-        Error (`Assoc json)
-    | _ ->
-        Ok json
-
-  let get ?verbose ?headers ?params gh route = curl ?verbose "GET" ?headers ?params gh route
-  let post ?verbose ?headers ?data gh route = curl ?verbose "POST" ?headers ?data gh route
-
-  let list_milestones ?verbose gh =
-    let f json =
-      let title = json |> J.member "title" |> J.to_string in
-      let number = json |> J.member "number" |> J.to_int in
-      Some (title, number)
-    in
-    match get ?verbose ~params:["state", "all"] gh "milestones" with
-    | Error json ->
-        Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-        None
-    | Ok json ->
-        Some (json |> J.to_list |> J.filter_map f)
-
-  let is_imported ?verbose gh id =
-    match get ?verbose gh (Printf.sprintf "import/issues/%d" id) with
-    | Error _ as x -> Some x
-    | Ok json ->
-        begin match json |> J.member "status" |> J.to_string with
-        | "imported" ->
-            let id =
-              json
-              |> J.member "issue_url"
-              |> J.to_string
-              |> String.split_on_char '/'
-              |> List.rev
-              |> List.hd
-              |> int_of_string
-            in
-            Some (Ok id)
-        | "failed" ->
-            Some (Error json)
-        | _ ->
-            None
-        end
-
-  let start_import ?verbose gh json =
-    match post ?verbose ~data:json gh "import/issues" with
-    | Ok json -> Ok (json |> J.member "id" |> J.to_int)
-    | Error _ as x -> x
-
-  let create_issue ?verbose gh json =
-    match start_import ?verbose gh json with
-    | Error json ->
-        Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-        Error 0
-    | Ok id ->
-        let rec loop n retries =
-          Unix.sleep n;
-          match is_imported ?verbose gh id with
-          | Some (Ok id) -> Ok (id, retries)
-          | Some (Error json_err) ->
-              let json = `Assoc ["issue", json; "error", json_err] in
-              Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-              Error retries
-          | None ->
-              loop (2 * n) (succ retries)
-        in
-        loop 1 0
-end
-
 module Labels = struct
   type t =
     | Duplicate
@@ -768,7 +644,7 @@ let extract db = function
         ) bug_ids
 
 let milestones gh =
-  match Curl.list_milestones gh with
+  match Github.list_milestones gh with
   | Some l ->
       List.iter print_endline (List.map fst l)
   | None ->
@@ -777,7 +653,7 @@ let milestones gh =
 let create_issues gh db bug_ids =
   let issues = Hashtbl.of_list (fetch db) in
   List.iter (fun id ->
-      ignore (Curl.create_issue gh (Issue.to_json (Hashtbl.find issues id)))
+      ignore (Github.create_issue gh (Issue.to_json (Hashtbl.find issues id)))
     ) bug_ids
 
 let migrate verbose gh db assignee from nmax =
@@ -791,7 +667,7 @@ let migrate verbose gh db assignee from nmax =
           loop total_retries total count (succ idx)
       | Some issue ->
           let starttime = Unix.gettimeofday () in
-          let res = Curl.create_issue ~verbose gh (Issue.to_json ?assignee issue) in
+          let res = Github.create_issue ~verbose gh (Issue.to_json ?assignee issue) in
           let endtime = Unix.gettimeofday () in
           let delta = endtime -. starttime in
           let total = total +. delta in
@@ -868,7 +744,7 @@ let github_t =
     let doc = "Github token." in
     Arg.(value & opt (some string) None & info ["token"] ~docs ~doc)
   in
-  let github owner repo token = {owner; repo; token} in
+  let github owner repo token = {Github.owner; repo; token} in
   Term.(const github $ owner $ repo $ token)
 
 let milestones_cmd =
