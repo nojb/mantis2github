@@ -74,41 +74,42 @@ type gh =
 module Curl = struct
   let root = "https://api.github.com"
 
-  let curl meth ?(headers = []) ?data:arg ?(params = []) {owner; repo; token} route =
+  let curl ?(verbose = false) meth ?(headers = []) ?data ?(params = []) {owner; repo; token} route =
     let headers =
       match token with
       | Some token -> ("Authorization", "token " ^ token) :: headers
       | None -> headers
     in
     let headers = ("Accept", "application/vnd.github.golden-comet-preview+json") :: headers in
-    let headers =
-      match headers with
-      | [] -> ""
-      | l ->
+    let cmd =
+      let headers =
+        match headers with
+        | [] -> ""
+        | l ->
           String.concat " "
             (List.map (fun (k, v) -> "-H \"" ^ k ^ ": " ^ v ^ "\"") l) ^ " "
-    in
-    let data =
-      match arg with
-      | None -> ""
-      | Some data ->
+      in
+      let data =
+        match data with
+        | None -> ""
+        | Some data ->
           (* Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) data; *)
           let filename, oc = Filename.open_temp_file "curl" "data" in
           set_binary_mode_out oc true;
           Yojson.Basic.pretty_to_channel ~std:true oc data;
           close_out oc;
           "--data-binary @" ^ filename ^ " "
+      in
+      let params =
+        match params with
+        | [] -> ""
+        | l -> "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
+      in
+      let verbose = if verbose then "--verbose " else "" in
+      Printf.sprintf "curl -Ss %s%s%s-X %s %s/repos/%s/%s/%s%s"
+        verbose data headers meth root owner repo route params
     in
-    let params =
-      match params with
-      | [] -> ""
-      | l -> "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
-    in
-    let cmd =
-      Printf.sprintf "curl -Ss %s%s-X %s %s/repos/%s/%s/%s%s"
-        data headers meth root owner repo route params
-    in
-    (* Printf.eprintf "+ %s\n%!" cmd; *)
+    if verbose then Printf.eprintf "+ %s\n%!" cmd;
     let tmp = Filename.temp_file "curl" "out" in
     assert (Sys.command (Printf.sprintf "%s > %s" cmd tmp) = 0);
     let ic = open_in_bin tmp in
@@ -119,29 +120,29 @@ module Curl = struct
     match J.member "message" json with
     | `String _ ->
         let json = ["cmd", `String cmd; "res", json] in
-        let json = match arg with None -> json | Some arg -> ("arg", arg) :: json in
+        let json = match data with None -> json | Some data -> ("data", data) :: json in
         Error (`Assoc json)
     | _ ->
         Ok json
 
-  let get ?headers ?params gh route = curl "GET" ?headers ?params gh route
-  let post ?headers ?data gh route = curl "POST" ?headers ?data gh route
+  let get ?verbose ?headers ?params gh route = curl ?verbose "GET" ?headers ?params gh route
+  let post ?verbose ?headers ?data gh route = curl ?verbose "POST" ?headers ?data gh route
 
-  let list_milestones gh =
+  let list_milestones ?verbose gh =
     let f json =
       let title = json |> J.member "title" |> J.to_string in
       let number = json |> J.member "number" |> J.to_int in
       Some (title, number)
     in
-    match get ~params:["state", "all"] gh "milestones" with
+    match get ?verbose ~params:["state", "all"] gh "milestones" with
     | Error json ->
         Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
         None
     | Ok json ->
         Some (json |> J.to_list |> J.filter_map f)
 
-  let is_imported gh id =
-    match get gh (Printf.sprintf "import/issues/%d" id) with
+  let is_imported ?verbose gh id =
+    match get ?verbose gh (Printf.sprintf "import/issues/%d" id) with
     | Error _ as x -> Some x
     | Ok json ->
         begin match json |> J.member "status" |> J.to_string with
@@ -162,19 +163,19 @@ module Curl = struct
             None
         end
 
-  let start_import gh json =
-    match post ~data:json gh "import/issues" with
+  let start_import ?verbose gh json =
+    match post ?verbose ~data:json gh "import/issues" with
     | Ok json -> Ok (json |> J.member "id" |> J.to_int)
     | Error _ as x -> x
 
-  let create_issue gh json =
-    match start_import gh json with
+  let create_issue ?verbose gh json =
+    match start_import ?verbose gh json with
     | Error json ->
         Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
         None
     | Ok id ->
         let rec loop n =
-          match is_imported gh id with
+          match is_imported ?verbose gh id with
           | Some (Ok id) -> Some id
           | Some (Error json_err) ->
               let json = `Assoc ["issue", json; "error", json_err] in
@@ -490,6 +491,7 @@ module Issue = struct
         tags;
       }
     =
+    let summary = if summary = "" then "*no title*" else summary in
     let body =
       body ~id ?reporter ~tags ~category ~version ~target_version ~fixed_in_version
         ~priority ~severity
@@ -759,7 +761,7 @@ let create_issues gh db bug_ids =
       ignore (Curl.create_issue gh (Issue.to_json (Hashtbl.find issues id)))
     ) bug_ids
 
-let migrate gh db assignee from nmax =
+let migrate verbose gh db assignee from nmax =
   let issues = Hashtbl.of_list (fetch db) in
   let n = Hashtbl.length issues in
   let rec loop total count idx =
@@ -770,7 +772,7 @@ let migrate gh db assignee from nmax =
           loop total count (succ idx)
       | Some issue ->
           let starttime = Unix.gettimeofday () in
-          let res = Curl.create_issue gh (Issue.to_json ?assignee issue) in
+          let res = Curl.create_issue ~verbose gh (Issue.to_json ?assignee issue) in
           let endtime = Unix.gettimeofday () in
           let delta = endtime -. starttime in
           let total = total +. delta in
@@ -814,6 +816,10 @@ let db_t =
     Arg.(value & opt (some string) (Some "root") & info ["username"] ~docs ~doc)
   in
   Term.(const db $ dbhost $ dbname $ dbport $ dbpwd $ dbuser)
+
+let verbose_t =
+  let doc = "Be verbose." in
+  Arg.(value & flag & info ["verbose"; "v"] ~doc)
 
 let bug_ids_t =
   let doc = "Mantis bug numbers." in
@@ -866,7 +872,7 @@ let from_t =
 
 let migrate_cmd =
   let doc = "Migrate all issues." in
-  Term.(const migrate $ github_t $ db_t $ force_assignee_t $ from_t $ nmax_t),
+  Term.(const migrate $ verbose_t $ github_t $ db_t $ force_assignee_t $ from_t $ nmax_t),
   Term.info "migrate" ~doc
 
 let default_cmd =
