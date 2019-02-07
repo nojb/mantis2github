@@ -739,7 +739,7 @@ let create_issues gh db bug_ids =
       ignore (Curl.create_issue gh (Issue.to_json (Hashtbl.find issues id)))
     ) bug_ids
 
-let migrate gh db assignee nmax =
+let migrate gh db assignee from nmax =
   let issues = Hashtbl.of_list (fetch db) in
   let n = Hashtbl.length issues in
   let rec loop total count idx =
@@ -760,11 +760,11 @@ let migrate gh db assignee nmax =
             | None -> "ERR"
           in
           let count = succ count in
-          Printf.printf "%4d %4s %6.1f %6.1f %6.1f\n%!" issue.Issue.id id delta (total /. count) total;
+          Printf.printf "%4d %4s %6.1f %6.1f %6.1f\n%!" issue.Issue.id id delta (total /. float count) total;
           loop total count (succ idx)
     end
   in
-  loop 0. 0 0
+  loop 0. 0 from
 
 open Cmdliner
 
@@ -840,9 +840,13 @@ let nmax_t =
   let doc = "Max number of issues to migrate." in
   Arg.(value & opt int max_int & info ["max"] ~doc)
 
+let from_t =
+  let doc = "Bug number to start importing from." in
+  Arg.(value & opt int 0 & info ["from"] ~doc)
+
 let migrate_cmd =
   let doc = "Migrate all issues." in
-  Term.(const migrate $ github_t $ db_t $ force_assignee_t $ nmax_t),
+  Term.(const migrate $ github_t $ db_t $ force_assignee_t $ from_t $ nmax_t),
   Term.info "migrate" ~doc
 
 let default_cmd =
