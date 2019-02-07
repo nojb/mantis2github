@@ -172,19 +172,20 @@ module Curl = struct
     match start_import ?verbose gh json with
     | Error json ->
         Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-        None
+        Error 0
     | Ok id ->
-        let rec loop n =
+        let rec loop n retries =
+          Unix.sleep n;
           match is_imported ?verbose gh id with
-          | Some (Ok id) -> Some id
+          | Some (Ok id) -> Ok (id, retries)
           | Some (Error json_err) ->
               let json = `Assoc ["issue", json; "error", json_err] in
               Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-              None
+              Error retries
           | None ->
-              Unix.sleep n; loop (2 * n)
+              loop (2 * n) (succ retries)
         in
-        loop 1
+        loop 1 0
 end
 
 module Labels = struct
@@ -764,29 +765,33 @@ let create_issues gh db bug_ids =
 let migrate verbose gh db assignee from nmax =
   let issues = Hashtbl.of_list (fetch db) in
   let n = Hashtbl.length issues in
-  let rec loop total count idx =
+  let rec loop total_retries total count idx =
     if count >= min n nmax then ()
     else begin
       match Hashtbl.find_opt issues idx with
       | None ->
-          loop total count (succ idx)
+          loop total_retries total count (succ idx)
       | Some issue ->
           let starttime = Unix.gettimeofday () in
           let res = Curl.create_issue ~verbose gh (Issue.to_json ?assignee issue) in
           let endtime = Unix.gettimeofday () in
           let delta = endtime -. starttime in
           let total = total +. delta in
+          let retries = match res with Ok (_, retries) | Error retries -> retries in
+          let total_retries = total_retries + retries in
           let id =
             match res with
-            | Some id -> string_of_int id
-            | None -> "ERR"
+            | Ok (id, _) -> string_of_int id
+            | Error _ -> "ERR"
           in
           let count = succ count in
-          Printf.printf "%4d %4s %6.1f %6.1f %6.1f\n%!" issue.Issue.id id delta (total /. float count) total;
-          loop total count (succ idx)
+          Printf.printf "%4d %4s %2d %2d %6d %6.1f %6.1f %6.1f\n%!"
+            issue.Issue.id id retries (truncate (float total_retries /. float count))
+            total_retries delta (total /. float count) total;
+          loop total_retries total count (succ idx)
     end
   in
-  loop 0. 0 from
+  loop 0 0. 0 from
 
 open Cmdliner
 
