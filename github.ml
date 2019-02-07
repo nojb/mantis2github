@@ -48,8 +48,8 @@ module Api = struct
         match headers with
         | [] -> ""
         | l ->
-            String.concat " "
-              (List.map (fun (k, v) -> "-H \"" ^ k ^ ": " ^ v ^ "\"") l) ^ " "
+            String.concat ""
+              (List.map (fun (k, v) -> Printf.sprintf "-H \"%s: %s\" " k v) l)
       in
       let data =
         match data with
