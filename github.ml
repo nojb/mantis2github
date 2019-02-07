@@ -89,6 +89,7 @@ module Api = struct
 
   let get ?verbose ?headers ?params ?token fmt =
     Printf.ksprintf (curl GET ?verbose ?headers ?params ?token) fmt
+
   let post ?verbose ?headers ?data ?token fmt =
     Printf.ksprintf (curl POST ?verbose ?headers ?data ?token) fmt
 end
@@ -110,7 +111,7 @@ module Milestone = struct
 end
 
 module Issue = struct
-  let is_imported ?verbose ?token ~repo ~owner id =
+  let is_imported ?verbose ?token ~owner ~repo id =
     match Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id with
     | Error _ as x -> Some x
     | Ok json ->
@@ -132,13 +133,13 @@ module Issue = struct
             None
         end
 
-  let start_import ?verbose ?token ~repo ~owner json =
-    match Api.post ?verbose ~data:json ?token "/repos/%s/%s/import/issues" owner repo with
+  let start_import ?verbose ?token ~owner ~repo data =
+    match Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo with
     | Ok json -> Ok (json |> J.member "id" |> J.to_int)
     | Error _ as x -> x
 
-  let import ?verbose ?token ~repo ~owner json =
-    match start_import ?verbose ?token ~repo ~owner json with
+  let import ?verbose ?token ~owner ~repo data =
+    match start_import ?verbose ?token ~repo ~owner data with
     | Error json ->
         Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
         Error 0
@@ -148,7 +149,7 @@ module Issue = struct
           match is_imported ?verbose ?token ~repo ~owner id with
           | Some (Ok id) -> Ok (id, retries)
           | Some (Error json_err) ->
-              let json = `Assoc ["issue", json; "error", json_err] in
+              let json = `Assoc ["issue", data; "error", json_err] in
               Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
               Error retries
           | None ->
