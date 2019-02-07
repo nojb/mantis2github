@@ -332,7 +332,7 @@ module Issue = struct
         String.concat "\n" (List.map (fun (s1, s2) -> s1 ^ ": " ^ s2) l)
       in
       combine
-        [ "ID", Printf.sprintf "%07d" id;
+        [ "ID", string_of_int id;
           "Reporter", reporter;
           "Version", version;
           "Target version", target_version;
