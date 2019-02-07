@@ -88,61 +88,65 @@ let curl ?(verbose = false) meth ?(headers = []) ?data ?(params = []) {owner; re
 let get ?verbose ?headers ?params gh route = curl ?verbose "GET" ?headers ?params gh route
 let post ?verbose ?headers ?data gh route = curl ?verbose "POST" ?headers ?data gh route
 
-let list_milestones ?verbose gh =
-  let f json =
-    let title = json |> J.member "title" |> J.to_string in
-    let number = json |> J.member "number" |> J.to_int in
-    Some (title, number)
-  in
-  match get ?verbose ~params:["state", "all"] gh "milestones" with
-  | Error json ->
-      Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-      None
-  | Ok json ->
-      Some (json |> J.to_list |> J.filter_map f)
+module Milestone = struct
+  let list ?verbose gh =
+    let f json =
+      let title = json |> J.member "title" |> J.to_string in
+      let number = json |> J.member "number" |> J.to_int in
+      Some (title, number)
+    in
+    match get ?verbose ~params:["state", "all"] gh "milestones" with
+    | Error json ->
+        Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+        None
+    | Ok json ->
+        Some (json |> J.to_list |> J.filter_map f)
+end
 
-let is_imported ?verbose gh id =
-  match get ?verbose gh (Printf.sprintf "import/issues/%d" id) with
-  | Error _ as x -> Some x
-  | Ok json ->
-      begin match json |> J.member "status" |> J.to_string with
-      | "imported" ->
-          let id =
-            json
-            |> J.member "issue_url"
-            |> J.to_string
-            |> String.split_on_char '/'
-            |> List.rev
-            |> List.hd
-            |> int_of_string
-          in
-          Some (Ok id)
-      | "failed" ->
-          Some (Error json)
-      | _ ->
-          None
-      end
+module Issue = struct
+  let is_imported ?verbose gh id =
+    match get ?verbose gh (Printf.sprintf "import/issues/%d" id) with
+    | Error _ as x -> Some x
+    | Ok json ->
+        begin match json |> J.member "status" |> J.to_string with
+        | "imported" ->
+            let id =
+              json
+              |> J.member "issue_url"
+              |> J.to_string
+              |> String.split_on_char '/'
+              |> List.rev
+              |> List.hd
+              |> int_of_string
+            in
+            Some (Ok id)
+        | "failed" ->
+            Some (Error json)
+        | _ ->
+            None
+        end
 
-let start_import ?verbose gh json =
-  match post ?verbose ~data:json gh "import/issues" with
-  | Ok json -> Ok (json |> J.member "id" |> J.to_int)
-  | Error _ as x -> x
+  let start_import ?verbose gh json =
+    match post ?verbose ~data:json gh "import/issues" with
+    | Ok json -> Ok (json |> J.member "id" |> J.to_int)
+    | Error _ as x -> x
 
-let create_issue ?verbose gh json =
-  match start_import ?verbose gh json with
-  | Error json ->
-      Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-      Error 0
-  | Ok id ->
-      let rec loop n retries =
-        Unix.sleep n;
-        match is_imported ?verbose gh id with
-        | Some (Ok id) -> Ok (id, retries)
-        | Some (Error json_err) ->
-            let json = `Assoc ["issue", json; "error", json_err] in
-            Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-            Error retries
-        | None ->
-            loop (2 * n) (succ retries)
-      in
-      loop 1 0
+  let import ?verbose gh json =
+    match start_import ?verbose gh json with
+    | Error json ->
+        Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+        Error 0
+    | Ok id ->
+        let rec loop n retries =
+          Unix.sleep n;
+          match is_imported ?verbose gh id with
+          | Some (Ok id) -> Ok (id, retries)
+          | Some (Error json_err) ->
+              let json = `Assoc ["issue", json; "error", json_err] in
+              Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+              Error retries
+          | None ->
+              loop (2 * n) (succ retries)
+        in
+        loop 1 0
+end

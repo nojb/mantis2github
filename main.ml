@@ -644,7 +644,7 @@ let extract db = function
         ) bug_ids
 
 let milestones gh =
-  match Github.list_milestones gh with
+  match Github.Milestone.list gh with
   | Some l ->
       List.iter print_endline (List.map fst l)
   | None ->
@@ -653,7 +653,7 @@ let milestones gh =
 let create_issues gh db bug_ids =
   let issues = Hashtbl.of_list (fetch db) in
   List.iter (fun id ->
-      ignore (Github.create_issue gh (Issue.to_json (Hashtbl.find issues id)))
+      ignore (Github.Issue.import gh (Issue.to_json (Hashtbl.find issues id)))
     ) bug_ids
 
 let migrate verbose gh db assignee from nmax =
@@ -667,7 +667,7 @@ let migrate verbose gh db assignee from nmax =
           loop total_retries total count (succ idx)
       | Some issue ->
           let starttime = Unix.gettimeofday () in
-          let res = Github.create_issue ~verbose gh (Issue.to_json ?assignee issue) in
+          let res = Github.Issue.import ~verbose gh (Issue.to_json ?assignee issue) in
           let endtime = Unix.gettimeofday () in
           let delta = endtime -. starttime in
           let total = total +. delta in
