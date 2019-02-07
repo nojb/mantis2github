@@ -422,10 +422,11 @@ module Issue = struct
     badd buf "Additional information" additional_information;
     Buffer.contents buf
 
-  let labels ~priority ~severity ~category:_ ~status:_ ~resolution:_ =
+  let labels ~priority ~severity ~category:_ ~status:_ ~resolution =
     let l =
       Priority.to_labels priority @
-      Severity.to_labels severity
+      Severity.to_labels severity @
+      Resolution.to_labels resolution
     in
     List.sort Stdlib.compare l |> List.map Labels.to_string
 
