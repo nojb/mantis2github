@@ -74,7 +74,7 @@ type gh =
 module Curl = struct
   let root = "https://api.github.com"
 
-  let curl meth ?(headers = []) ?data ?(params = []) {owner; repo; token} route =
+  let curl meth ?(headers = []) ?data:arg ?(params = []) {owner; repo; token} route =
     let headers =
       match token with
       | Some token -> ("Authorization", "token " ^ token) :: headers
@@ -89,12 +89,13 @@ module Curl = struct
             (List.map (fun (k, v) -> "-H \"" ^ k ^ ": " ^ v ^ "\"") l) ^ " "
     in
     let data =
-      match data with
+      match arg with
       | None -> ""
       | Some data ->
+          (* Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) data; *)
           let filename, oc = Filename.open_temp_file "curl" "data" in
           set_binary_mode_out oc true;
-          output_string oc data;
+          Yojson.Basic.pretty_to_channel ~std:true oc data;
           close_out oc;
           "--data-binary @" ^ filename ^ " "
     in
@@ -107,18 +108,21 @@ module Curl = struct
       Printf.sprintf "curl -Ss %s%s-X %s %s/repos/%s/%s/%s%s"
         data headers meth root owner repo route params
     in
-    Printf.eprintf "+ %s\n%!" cmd;
+    (* Printf.eprintf "+ %s\n%!" cmd; *)
     let tmp = Filename.temp_file "curl" "out" in
     assert (Sys.command (Printf.sprintf "%s > %s" cmd tmp) = 0);
     let ic = open_in_bin tmp in
     let s = really_input_string ic (in_channel_length ic) in
     close_in ic;
     let json = Yojson.Basic.from_string s in
-    Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+    (* Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json; *)
     match J.member "message" json with
-    | `String s -> failwith s
+    | `String _ ->
+        let json = ["cmd", `String cmd; "res", json] in
+        let json = match arg with None -> json | Some arg -> ("arg", arg) :: json in
+        Error (`Assoc json)
     | _ ->
-        json
+        Ok json
 
   let get ?headers ?params gh route = curl "GET" ?headers ?params gh route
   let post ?headers ?data gh route = curl "POST" ?headers ?data gh route
@@ -129,38 +133,57 @@ module Curl = struct
       let number = json |> J.member "number" |> J.to_int in
       Some (title, number)
     in
-    get ~params:["state", "all"] gh "milestones" |> J.to_list |> J.filter_map f
+    match get ~params:["state", "all"] gh "milestones" with
+    | Error json ->
+        Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+        None
+    | Ok json ->
+        Some (json |> J.to_list |> J.filter_map f)
 
   let is_imported gh id =
-    let json = get gh (Printf.sprintf "import/issues/%d" id) in
-    match json |> J.member "status" |> J.to_string with
-    | "imported" ->
-        let id =
-          json
-          |> J.member "issue_url"
-          |> J.to_string
-          |> String.split_on_char '/'
-          |> List.rev
-          |> List.hd
-          |> int_of_string
-        in
-        Some id
-    | "failed" -> failwith "Import failed!"
-    | _ -> None
+    match get gh (Printf.sprintf "import/issues/%d" id) with
+    | Error _ as x -> Some x
+    | Ok json ->
+        begin match json |> J.member "status" |> J.to_string with
+        | "imported" ->
+            let id =
+              json
+              |> J.member "issue_url"
+              |> J.to_string
+              |> String.split_on_char '/'
+              |> List.rev
+              |> List.hd
+              |> int_of_string
+            in
+            Some (Ok id)
+        | "failed" ->
+            Some (Error json)
+        | _ ->
+            None
+        end
 
   let start_import gh json =
-    let data = Yojson.Basic.pretty_to_string json in
-    Printf.eprintf "%s\n%!" data;
-    post ~data gh "import/issues" |> J.member "id" |> J.to_int
+    match post ~data:json gh "import/issues" with
+    | Ok json -> Ok (json |> J.member "id" |> J.to_int)
+    | Error _ as x -> x
 
   let create_issue gh json =
-    let id = start_import gh json in
-    let rec loop n =
-      match is_imported gh id with
-      | Some id -> id
-      | None -> Unix.sleep n; loop (2 * n)
-    in
-    loop 1
+    match start_import gh json with
+    | Error json ->
+        Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+        None
+    | Ok id ->
+        let rec loop n =
+          match is_imported gh id with
+          | Some (Ok id) -> Some id
+          | Some (Error json_err) ->
+              let json = `Assoc ["issue", json; "error", json_err] in
+              Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+              None
+          | None ->
+              Unix.sleep n; loop (2 * n)
+        in
+        loop 1
 end
 
 module Labels = struct
@@ -704,8 +727,11 @@ let extract db =
   List.iter f (fetch db)
 
 let milestones gh =
-  let l = Curl.list_milestones gh in
-  List.iter print_endline (List.map fst l)
+  match Curl.list_milestones gh with
+  | Some l ->
+      List.iter print_endline (List.map fst l)
+  | None ->
+      ()
 
 let create_issues gh db bug_ids =
   let issues = Hashtbl.of_list (fetch db) in
@@ -724,12 +750,17 @@ let migrate gh db assignee nmax =
           loop total count (succ idx)
       | Some issue ->
           let starttime = Unix.gettimeofday () in
-          let id = Curl.create_issue gh (Issue.to_json ?assignee issue) in
+          let res = Curl.create_issue gh (Issue.to_json ?assignee issue) in
           let endtime = Unix.gettimeofday () in
           let delta = endtime -. starttime in
           let total = total +. delta in
-          Printf.printf "%4d %4d %6.1f %6.1f\n%!" issue.Issue.id id delta total;
-          loop total (succ count) (succ idx)
+          let id, count =
+            match res with
+            | Some id -> string_of_int id, succ count
+            | None -> "ERR", count
+          in
+          Printf.printf "%4d %4s %6.1f %6.1f\n%!" issue.Issue.id id delta total;
+          loop total count (succ idx)
     end
   in
   loop 0. 0 0
