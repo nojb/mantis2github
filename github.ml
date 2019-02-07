@@ -148,8 +148,8 @@ module Issue = struct
           Unix.sleep n;
           match is_imported ?verbose ?token ~repo ~owner id with
           | Some (Ok id) -> Ok (id, retries)
-          | Some (Error json_err) ->
-              let json = `Assoc ["issue", data; "error", json_err] in
+          | Some (Error err) ->
+              let json = `Assoc ["issue", data; "error", err] in
               Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
               Error retries
           | None ->
