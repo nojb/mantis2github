@@ -53,7 +53,7 @@ module Label = struct
     | Block -> "block"
 
   module L = struct
-    type nonrec t = t list
+    type nonrec _t = t list
 
     let of_priority = function
       | Mantis.Priority.None | Normal -> []
