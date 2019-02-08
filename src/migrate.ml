@@ -94,7 +94,7 @@ end = struct
       let reporter =
         match reporter with
         | None -> ""
-        | Some s -> Printf.sprintf "**Original comment author:** %s\n" s
+        | Some s -> Printf.sprintf "*Comment author:* %s\n" s
       in
       let text = String.trim text in
       if text <> "" then reporter ^ "\n" ^ text else reporter
@@ -113,10 +113,10 @@ end = struct
     let combine l =
       let l = List.map (fun (s1, s2) -> (s1, String.trim s2)) l in
       let l = List.filter (function (_, "") -> false | _ -> true) l in
-      String.concat "\n" (List.map (fun (s1, s2) -> Printf.sprintf "**%s:** %s" s1 s2) l)
+      String.concat "\n" (List.map (fun (s1, s2) -> Printf.sprintf "*%s:* %s" s1 s2) l)
     in
     combine
-      [ "ID", string_of_int id;
+      [ "Mantis ID", string_of_int id;
         "Reporter", reporter;
         "Version", version;
         "Target version", target_version;
@@ -128,16 +128,20 @@ end = struct
 
   let extra_notes ~created_at ~description ~steps_to_reproduce ~additional_information =
     let note title contents l =
-      let title = "#### " ^ title in
+      let title =
+        match title with
+        | None -> ""
+        | Some s -> Printf.sprintf "### *%s*\n\n" s
+      in
       match String.trim contents with
       | "" -> l
       | body ->
-          let body = Printf.sprintf "#### %s\n\n%s" title body in
+          let body = title ^ body in
           {Github.Issue.Comment.created_at = Some created_at; body} :: l
     in
-    note "Description" description
-      (note "Steps to reproduce" steps_to_reproduce
-         (note "Additional information" additional_information []))
+    note None description
+      (note (Some "Steps to reproduce") steps_to_reproduce
+         (note (Some "Additional information") additional_information []))
 
   let labels ~priority ~severity ~category:_ ~status:_ ~resolution =
     Label.L.(of_priority priority @ of_severity severity @ of_resolution resolution)
