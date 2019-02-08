@@ -147,11 +147,41 @@ let import verbose (token, owner, repo) db assignee from nmax ids =
 let largest_issue verbose (token, owner, repo) =
   match Github.Issue.list ~verbose ?token ~owner ~repo () with
   | None ->
-    prerr_endline "Could not retrieve issue numbers!"
+    failwith "Could not retrieve issue numbers!"
   | Some (id :: _) ->
-    print_endline (string_of_int id)
+    id
   | Some [] ->
-    print_endline "No issues!"
+    failwith "No issues!"
+
+module IntSet = Set.Make (struct type t = int let compare = Stdlib.compare end)
+
+let assignment verbose (token, owner, repo) db =
+  let rec go assigned unassigned next = function
+    | id :: ids as ids' ->
+      if id < next then
+        go assigned (IntSet.add id unassigned) next ids
+      else if id = next then
+        go ((id, next) :: assigned) unassigned (succ next) ids
+      else (* id > next *)
+        begin match IntSet.min_elt_opt unassigned with
+        | None -> failwith "something bad"
+        | Some id -> go ((id, next) :: assigned) (IntSet.remove id unassigned) (succ next) ids'
+        end
+    | [] ->
+      let rec loop unassigned assigned next =
+        match IntSet.min_elt_opt unassigned with
+        | None -> assigned
+        | Some id -> loop (IntSet.remove id unassigned) ((id, next) :: assigned) (succ next)
+      in
+      loop unassigned assigned next
+  in
+  let largest = largest_issue verbose (token, owner, repo) in
+  let issues = Mantis.Db.use db Mantis.fetch in
+  Hashtbl.fold (fun id _ acc -> id :: acc) issues []
+  |> List.sort Stdlib.compare
+  |> go [] IntSet.empty (succ largest)
+  |> List.sort (fun (_, gh_id1) (_, gh_id2) -> Stdlib.compare gh_id1 gh_id2)
+  |> List.iter (fun (id, gh_id) -> Printf.printf "%4d %4d\n" id gh_id)
 
 open Cmdliner
 
@@ -235,10 +265,10 @@ let import_cmd =
   Term.(const import $ verbose_t $ github_t $ db_t $ assignee_t $ from_t $ nmax_t $ bug_ids_t),
   Term.info "import" ~doc
 
-let largest_issue_cmd =
-  let doc = "Largest issue number." in
-  Term.(const largest_issue $ verbose_t $ github_t),
-  Term.info "largest-issue" ~doc
+let assignment_cmd =
+  let doc = "Compute issue assignment." in
+  Term.(const assignment $ verbose_t $ github_t $ db_t),
+  Term.info "assignment" ~doc
 
 let default_cmd =
   let doc = "a Mantis => Github migration tool" in
@@ -247,7 +277,7 @@ let default_cmd =
   Term.(ret (const (`Help (`Pager, None)))),
   Term.info "mantis2github" ~version:"v0.1" ~doc ~sdocs ~exits
 
-let cmds = [extract_cmd; milestones_cmd; largest_issue_cmd; import_cmd]
+let cmds = [extract_cmd; milestones_cmd; import_cmd; assignment_cmd]
 
 let () =
   Term.(exit (eval_choice default_cmd cmds))
