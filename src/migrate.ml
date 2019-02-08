@@ -84,6 +84,13 @@ let badd buf title s =
   let s = String.trim s in
   if s <> "" then Printf.bprintf buf "**%s**\n%s\n%s\n%s\n" title fence s fence
 
+let timestamp s =
+  let {Unix.tm_year; tm_mon; tm_mday; tm_hour; tm_min; tm_sec; _} =
+    Unix.gmtime (float_of_string s)
+  in
+  Printf.sprintf "%04d-%02d-%02dT%02d:%02d:%02dZ"
+    (tm_year + 1900) (tm_mon + 1) tm_mday tm_hour tm_min tm_sec
+
 module Note : sig
   val migrate: Mantis.Note.t -> Github.Issue.Comment.t
 end = struct
@@ -96,7 +103,7 @@ end = struct
       Buffer.contents buf
     in
     {Github.Issue.Comment.body = text;
-     created_at = Some date_submitted}
+     created_at = Some (timestamp date_submitted)}
 end
 
 module Issue : sig
@@ -179,7 +186,7 @@ end = struct
       match closed_at, closed with
       | None, true -> Some updated_at
       | None, false -> None
-      | Some _ as x, _ -> x
+      | Some s, _ -> Some (timestamp s)
     in
     let assignee =
       match assignee with
@@ -190,8 +197,8 @@ end = struct
     in
     let issue =
       {Github.Issue.Issue.title; body;
-       created_at = Some created_at;
-       updated_at = Some updated_at;
+       created_at = Some (timestamp created_at);
+       updated_at = Some (timestamp updated_at);
        assignee; milestone; closed_at;
        closed = Some closed; labels}
     in

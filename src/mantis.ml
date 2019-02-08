@@ -296,13 +296,6 @@ module Db = struct
     Mysql.map (Mysql.exec dbd query) ~f |> Hashtbl.of_list
 end
 
-let timestamp s =
-  let {Unix.tm_year; tm_mon; tm_mday; tm_hour; tm_min; tm_sec; _} =
-    Unix.gmtime (float_of_string s)
-  in
-  Printf.sprintf "%04d-%02d-%02dT%02d:%02d:%02dZ"
-    (tm_year + 1900) (tm_mon + 1) tm_mday tm_hour tm_min tm_sec
-
 let fetch dbd =
   let categories =
     let f = function
@@ -346,8 +339,6 @@ let fetch dbd =
       | [|bug_id; reporter_id; bugnote_text_id; last_modified; date_submitted|] ->
           let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
           let text = Hashtbl.find texts (int_of_string bugnote_text_id) in
-          let last_modified = timestamp last_modified in
-          let date_submitted = timestamp date_submitted in
           int_of_string bug_id, {Note.reporter; text; last_modified; date_submitted}
       | _ ->
           assert false
@@ -361,7 +352,7 @@ let fetch dbd =
     let f = function
       | [|bug_id; date_modified; new_value|] ->
           int_of_string bug_id,
-          (timestamp date_modified, Status.of_int (int_of_string new_value))
+          (date_modified, Status.of_int (int_of_string new_value))
       | _ ->
           assert false
     in
@@ -437,8 +428,7 @@ let fetch dbd =
         let severity = Severity.of_int (int_of_string severity) in
         id,
         { Issue.id; summary; priority; severity; category;
-          date_submitted = timestamp date_submitted;
-          last_updated = timestamp last_updated; reporter; handler;
+          date_submitted; last_updated; reporter; handler;
           description; steps_to_reproduce; additional_information;
           version; target_version; fixed_in_version;
           notes; status; closed_at; resolution; related; tags }
