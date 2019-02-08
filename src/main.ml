@@ -76,10 +76,10 @@ let extract db ids =
       List.iter (fun id ->
           match Hashtbl.find_opt issues id with
           | None ->
-            Printf.eprintf "No Mantis issue found with id %d\n%!" id
+              Printf.eprintf "No Mantis issue found with id %d\n%!" id
           | Some issue ->
-            let json = Mantis.Issue.to_json issue in
-            Printf.printf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json
+              let json = Mantis.Issue.to_json issue in
+              Printf.printf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json
         ) ids
   in
   Mantis.Db.use db f

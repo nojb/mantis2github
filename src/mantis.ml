@@ -279,11 +279,11 @@ module Db = struct
     Mysql.set_charset dbd "utf8";
     match f dbd with
     | r ->
-      Mysql.disconnect dbd;
-      r
+        Mysql.disconnect dbd;
+        r
     | exception e ->
-      Mysql.disconnect dbd;
-      raise e
+        Mysql.disconnect dbd;
+        raise e
 
   let exec dbd f query =
     let f arr =
@@ -307,50 +307,50 @@ let fetch dbd =
   let categories =
     let f = function
       | [|id; name|] ->
-        int_of_string id, name
+          int_of_string id, name
       | _ ->
-        assert false
+          assert false
     in
     Db.exec dbd f "SELECT id, name FROM mantis_category_table;"
   in
   let users =
     let f = function
       | [|id; user_name|] ->
-        int_of_string id, user_name
+          int_of_string id, user_name
       | _ ->
-        assert false
+          assert false
     in
     Db.exec dbd f "SELECT id, username FROM mantis_user_table;"
   in
   let texts =
     let f = function
       | [|id; description; steps_to_reproduce; additional_information|] ->
-        int_of_string id, (description, steps_to_reproduce, additional_information)
+          int_of_string id, (description, steps_to_reproduce, additional_information)
       | _ ->
-        assert false
+          assert false
     in
     Db.exec dbd f "SELECT id, description, steps_to_reproduce, additional_information \
-                FROM mantis_bug_text_table;"
+                   FROM mantis_bug_text_table;"
   in
   let notes =
     let texts =
       let f = function
         | [|id; note|] ->
-          int_of_string id, note
+            int_of_string id, note
         | _ ->
-          assert false
+            assert false
       in
       Db.exec dbd f "SELECT id, note FROM mantis_bugnote_text_table;"
     in
     let f = function
       | [|bug_id; reporter_id; bugnote_text_id; last_modified; date_submitted|] ->
-        let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
-        let text = Hashtbl.find texts (int_of_string bugnote_text_id) in
-        let last_modified = timestamp last_modified in
-        let date_submitted = timestamp date_submitted in
-        int_of_string bug_id, {Note.reporter; text; last_modified; date_submitted}
+          let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
+          let text = Hashtbl.find texts (int_of_string bugnote_text_id) in
+          let last_modified = timestamp last_modified in
+          let date_submitted = timestamp date_submitted in
+          int_of_string bug_id, {Note.reporter; text; last_modified; date_submitted}
       | _ ->
-        assert false
+          assert false
     in
     Db.exec dbd f
       "SELECT bug_id, reporter_id, bugnote_text_id, \
@@ -360,10 +360,10 @@ let fetch dbd =
   let statuses =
     let f = function
       | [|bug_id; date_modified; new_value|] ->
-        int_of_string bug_id,
-        (timestamp date_modified, Status.of_int (int_of_string new_value))
+          int_of_string bug_id,
+          (timestamp date_modified, Status.of_int (int_of_string new_value))
       | _ ->
-        assert false
+          assert false
     in
     Db.exec dbd f
       "SELECT bug_id, date_modified, new_value FROM mantis_bug_history_table \
@@ -389,17 +389,17 @@ let fetch dbd =
     let all_tags =
       let f = function
         | [|tag_id; name|] ->
-          int_of_string tag_id, name
+            int_of_string tag_id, name
         | _ ->
-          assert false
+            assert false
       in
       Db.exec dbd f "SELECT id, name FROM mantis_tag_table;"
     in
     let f = function
       | [|bug_id; tag_id|] ->
-        int_of_string bug_id, Hashtbl.find all_tags (int_of_string tag_id)
+          int_of_string bug_id, Hashtbl.find all_tags (int_of_string tag_id)
       | _ ->
-        assert false
+          assert false
     in
     Db.exec dbd f
       "SELECT bug_id, tag_id FROM mantis_bug_tag_table;"
