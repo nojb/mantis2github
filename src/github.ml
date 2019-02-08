@@ -200,18 +200,14 @@ module Issue = struct
             None
         end
 
-  let start_import ?verbose ?token ~owner ~repo data =
-    match Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo with
-    | Ok json -> Ok (json |> J.member "id" |> J.to_int)
-    | Error _ as x -> x
-
   let import ?verbose ?token ~owner ~repo issue =
     let data = to_json issue in
-    match start_import ?verbose ?token ~repo ~owner data with
+    match Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo with
     | Error json ->
         Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
         Error 0
-    | Ok id ->
+    | Ok json ->
+        let id = json |> J.member "id" |> J.to_int in
         let rec loop n retries =
           Unix.sleep n;
           match is_imported ?verbose ?token ~repo ~owner id with
