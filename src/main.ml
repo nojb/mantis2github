@@ -63,23 +63,26 @@ let gh_user = function
   (* | "guesdon" -> "zoggy" *)
   | _ -> raise Not_found
 
-let extract db = function
-  | [] ->
-      let f (_, issue) =
+let extract db ids =
+  let f db =
+    let issues = Mantis.fetch db in
+    if ids = [] then
+      let f _ issue =
         let json = Mantis.Issue.to_json issue in
-        Printf.printf "%a\n" (Yojson.pretty_to_channel ~std:true) json
+        Printf.printf "%a\n" (Yojson.Basic.pretty_to_channel ~std:true) json
       in
-      List.iter f (Mantis.fetch db)
-  | bug_ids ->
-      let issues = Mantis.Hashtbl.of_list (Mantis.fetch db) in
+      Hashtbl.iter f issues
+    else
       List.iter (fun id ->
           match Hashtbl.find_opt issues id with
           | None ->
-              Printf.eprintf "No Mantis issue found with id %d\n%!" id
+            Printf.eprintf "No Mantis issue found with id %d\n%!" id
           | Some issue ->
-              let json = Mantis.Issue.to_json issue in
-              Printf.printf "%a\n%!" (Yojson.pretty_to_channel ~std:true) json
-        ) bug_ids
+            let json = Mantis.Issue.to_json issue in
+            Printf.printf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json
+        ) ids
+  in
+  Mantis.Db.use db f
 
 let milestones (token, owner, repo) =
   match Github.Milestone.list ?token ~owner ~repo () with
@@ -88,44 +91,54 @@ let milestones (token, owner, repo) =
   | None ->
       ()
 
-let import verbose (token, owner, repo) db assignee from nmax _bug_ids =
-  let issues = Mantis.Hashtbl.of_list (Mantis.fetch db) in
-  let n = Hashtbl.length issues in
-  let rec loop total_retries total count idx =
-    if count >= min n nmax then ()
-    else begin
-      match Hashtbl.find_opt issues idx with
-      | None ->
-          loop total_retries total count (succ idx)
-      | Some issue ->
-          let starttime = Unix.gettimeofday () in
-          let res =
-            let gh_user =
-              match assignee with
-              | None -> begin fun s -> try Some (gh_user s) with Not_found -> None end
-              | Some _ as x -> begin fun _ -> x end
-            in
-            Github.Issue.import ~verbose ?token ~owner ~repo
-              (Migrate.Issue.migrate ~gh_user issue)
-          in
-          let endtime = Unix.gettimeofday () in
-          let delta = endtime -. starttime in
-          let total = total +. delta in
-          let retries = match res with Ok (_, retries) | Error retries -> retries in
-          let total_retries = total_retries + retries in
-          let id =
-            match res with
-            | Ok (id, _) -> string_of_int id
-            | Error _ -> "ERR"
-          in
-          let count = succ count in
-          Printf.printf "%4d %4s %2d %2d %6d %6.1f %6.1f %6.1f\n%!"
-            issue.Mantis.Issue.id id retries (truncate (float total_retries /. float count))
-            total_retries delta (total /. float count) total;
-          loop total_retries total count (succ idx)
-    end
+module List = struct
+  include List
+
+  let rec truncate n = function
+    | [] -> []
+    | _ :: l when n > 0 -> truncate (pred n) l
+    | _ as l -> l
+end
+
+let import verbose (token, owner, repo) db assignee from nmax ids =
+  let gh_user =
+    match assignee with
+    | None -> begin fun s -> try Some (gh_user s) with Not_found -> None end
+    | Some _ as x -> begin fun _ -> x end
   in
-  loop 0 0. 0 from
+  let f db =
+    let issues = Mantis.fetch db in
+    let ids =
+      if ids = [] then Hashtbl.fold (fun id _ acc -> id :: acc) issues [] else ids
+    in
+    let ids = List.filter (fun id -> id >= from) ids in
+    let ids = List.truncate nmax ids in
+    let ids = List.sort Stdlib.compare ids in
+    let f (total_retries, total_time, count) id =
+      let issue = Hashtbl.find issues id in
+      let starttime = Unix.gettimeofday () in
+      let res =
+        Github.Issue.import ~verbose ?token ~owner ~repo
+          (Migrate.Issue.migrate ~gh_user issue)
+      in
+      let endtime = Unix.gettimeofday () in
+      let dt = endtime -. starttime in
+      let total_time = total_time +. dt in
+      let retries = match res with Ok (_, retries) | Error retries -> retries in
+      let total_retries = total_retries + retries in
+      let gh_id =
+        match res with
+        | Ok (id, _) -> string_of_int id
+        | Error _ -> "ERR"
+      in
+      Printf.printf "%4d %4s %2d %2d %6d %6.1f %6.1f %6.1f\n%!"
+        id gh_id retries (truncate (float total_retries /. float count))
+        total_retries dt (total_time /. float count) total_time;
+      (total_retries, total_time, succ count)
+    in
+    List.fold_left f (0, 0., 0) ids
+  in
+  Mantis.Db.use db (fun db -> ignore (f db))
 
 open Cmdliner
 

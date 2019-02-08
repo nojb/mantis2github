@@ -36,16 +36,6 @@ let str s1 s2 l =
   | None -> l
   | Some s2 -> (s1, `String s2) :: l
 
-let bool s1 s2 l =
-  match s2 with
-  | None -> l
-  | Some s2 -> (s1, `Bool s2) :: l
-
-let int s1 s2 l =
-  match s2 with
-  | None -> l
-  | Some s2 -> (s1, `Int s2) :: l
-
 module Priority = struct
   type t =
     | None
@@ -71,6 +61,9 @@ module Priority = struct
     | High -> "high"
     | Urgent -> "urgent"
     | Immediate -> "immediate"
+
+  let to_json x =
+    `String (to_string x)
 end
 
 module Severity = struct
@@ -271,22 +264,37 @@ module Issue = struct
     let l = ("last_updated", `String last_updated) :: l in
     let l = ("date_submitted", `String date_submitted) :: l in
     let l = ("category", `String category) :: l in
-    let l = ("severity", `String (Severity.to_string severity)) :: l in
-    let l = ("priority", `String (Priority.to_string priority)) :: l in
+    let l = ("severity", Severity.to_json severity) :: l in
+    let l = ("priority", Priority.to_json priority) :: l in
     let l = ("summary", `String summary) :: l in
     let l = ("id", `Int id) :: l in
     `Assoc l
 end
 
-let exec dbd ~f query =
-  let f arr =
-    let extract = function
-      | Some x -> x
-      | None -> Printf.ksprintf failwith "Unexpected result: %S" query
+module Db = struct
+  type t = Mysql.dbd
+
+  let use db f =
+    let dbd = Mysql.connect db in
+    Mysql.set_charset dbd "utf8";
+    match f dbd with
+    | r ->
+      Mysql.disconnect dbd;
+      r
+    | exception e ->
+      Mysql.disconnect dbd;
+      raise e
+
+  let exec dbd f query =
+    let f arr =
+      let extract = function
+        | Some x -> x
+        | None -> Printf.ksprintf failwith "Unexpected result: %S" query
+      in
+      f (Array.map extract arr)
     in
-    f (Array.map extract arr)
-  in
-  Mysql.map (Mysql.exec dbd query) ~f
+    Mysql.map (Mysql.exec dbd query) ~f |> Hashtbl.of_list
+end
 
 let timestamp s =
   let {Unix.tm_year; tm_mon; tm_mday; tm_hour; tm_min; tm_sec; _} =
@@ -295,90 +303,71 @@ let timestamp s =
   Printf.sprintf "%04d-%02d-%02dT%02d:%02d:%02dZ"
     (tm_year + 1900) (tm_mon + 1) tm_mday tm_hour tm_min tm_sec
 
-let main dbd =
+let fetch dbd =
   let categories =
-    let r =
-      let f = function
-        | [|id; name|] ->
-            int_of_string id, name
-        | _ ->
-            assert false
-      in
-      exec dbd ~f "SELECT id, name FROM mantis_category_table;"
+    let f = function
+      | [|id; name|] ->
+        int_of_string id, name
+      | _ ->
+        assert false
     in
-    Hashtbl.of_seq (List.to_seq r)
+    Db.exec dbd f "SELECT id, name FROM mantis_category_table;"
   in
   let users =
-    let r =
-      let f = function
-        | [|id; user_name|] ->
-            int_of_string id, user_name
-        | _ ->
-            assert false
-      in
-      exec dbd ~f "SELECT id, username FROM mantis_user_table;"
+    let f = function
+      | [|id; user_name|] ->
+        int_of_string id, user_name
+      | _ ->
+        assert false
     in
-    Hashtbl.of_list r
+    Db.exec dbd f "SELECT id, username FROM mantis_user_table;"
   in
   let texts =
-    let r =
-      let f = function
-        | [|id; description; steps_to_reproduce; additional_information|] ->
-            int_of_string id, (description, steps_to_reproduce, additional_information)
-        | _ ->
-            assert false
-      in
-      exec dbd ~f "SELECT id, description, steps_to_reproduce, additional_information \
-                   FROM mantis_bug_text_table;"
+    let f = function
+      | [|id; description; steps_to_reproduce; additional_information|] ->
+        int_of_string id, (description, steps_to_reproduce, additional_information)
+      | _ ->
+        assert false
     in
-    Hashtbl.of_list r
+    Db.exec dbd f "SELECT id, description, steps_to_reproduce, additional_information \
+                FROM mantis_bug_text_table;"
   in
   let notes =
     let texts =
-      let r =
-        let f = function
-          | [|id; note|] ->
-              int_of_string id, note
-          | _ ->
-              assert false
-        in
-        exec dbd ~f "SELECT id, note FROM mantis_bugnote_text_table;"
-      in
-      Hashtbl.of_list r
-    in
-    let r =
       let f = function
-        | [|bug_id; reporter_id; bugnote_text_id; last_modified; date_submitted|] ->
-            let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
-            let text = Hashtbl.find texts (int_of_string bugnote_text_id) in
-            let last_modified = timestamp last_modified in
-            let date_submitted = timestamp date_submitted in
-            int_of_string bug_id, {Note.reporter; text; last_modified; date_submitted}
+        | [|id; note|] ->
+          int_of_string id, note
         | _ ->
-            assert false
+          assert false
       in
-      exec dbd ~f "SELECT bug_id, reporter_id, bugnote_text_id, \
-                   last_modified, date_submitted \
-                   FROM mantis_bugnote_table ORDER BY date_submitted DESC;"
+      Db.exec dbd f "SELECT id, note FROM mantis_bugnote_text_table;"
     in
-    Hashtbl.of_list r
+    let f = function
+      | [|bug_id; reporter_id; bugnote_text_id; last_modified; date_submitted|] ->
+        let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
+        let text = Hashtbl.find texts (int_of_string bugnote_text_id) in
+        let last_modified = timestamp last_modified in
+        let date_submitted = timestamp date_submitted in
+        int_of_string bug_id, {Note.reporter; text; last_modified; date_submitted}
+      | _ ->
+        assert false
+    in
+    Db.exec dbd f
+      "SELECT bug_id, reporter_id, bugnote_text_id, \
+       last_modified, date_submitted \
+       FROM mantis_bugnote_table ORDER BY date_submitted DESC;"
   in
   let statuses =
-    let r =
-      let f = function
-        | [|bug_id; date_modified; new_value|] ->
-            int_of_string bug_id,
-            (timestamp date_modified, Status.of_int (int_of_string new_value))
-        | _ ->
-            assert false
-      in
-      exec dbd ~f
-        "SELECT bug_id, date_modified, new_value FROM mantis_bug_history_table \
-         WHERE field_name = 'status' ORDER BY date_modified ASC;"
+    let f = function
+      | [|bug_id; date_modified; new_value|] ->
+        int_of_string bug_id,
+        (timestamp date_modified, Status.of_int (int_of_string new_value))
+      | _ ->
+        assert false
     in
-    let h = Hashtbl.create (List.length r) in
-    List.iter (fun (id, x) -> Hashtbl.replace h id x) r;
-    h
+    Db.exec dbd f
+      "SELECT bug_id, date_modified, new_value FROM mantis_bug_history_table \
+       WHERE field_name = 'status' ORDER BY date_modified ASC;"
   in
   let relationships =
     let f = function
@@ -387,40 +376,33 @@ let main dbd =
       | _ ->
           assert false
     in
-    let r =
-      exec dbd ~f
+    let h =
+      Db.exec dbd f
         "SELECT source_bug_id, destination_bug_id \
          FROM mantis_bug_relationship_table;"
     in
-    let h = Hashtbl.create (List.length r) in
-    List.iter (fun (id, x) -> Hashtbl.add h id x; Hashtbl.add h x id) r;
-    h
-  in
-  let all_tags =
-    let r =
-      let f = function
-        | [|tag_id; name|] ->
-            int_of_string tag_id, name
-        | _ ->
-            assert false
-      in
-      exec dbd ~f "SELECT id, name FROM mantis_tag_table;"
-    in
-    Hashtbl.of_list r
+    let h' = Hashtbl.create (Hashtbl.length h) in
+    Hashtbl.iter (fun id x -> Hashtbl.add h' id x; Hashtbl.add h' x id) h;
+    h'
   in
   let tags =
-    let r =
+    let all_tags =
       let f = function
-        | [|bug_id; tag_id|] ->
-            int_of_string bug_id, int_of_string tag_id
+        | [|tag_id; name|] ->
+          int_of_string tag_id, name
         | _ ->
-            assert false
+          assert false
       in
-      exec dbd ~f
-        "SELECT bug_id, tag_id FROM mantis_bug_tag_table;"
+      Db.exec dbd f "SELECT id, name FROM mantis_tag_table;"
     in
-    let r = List.map (fun (bug_id, tag_id) -> bug_id, Hashtbl.find all_tags tag_id) r in
-    Hashtbl.of_list r
+    let f = function
+      | [|bug_id; tag_id|] ->
+        int_of_string bug_id, Hashtbl.find all_tags (int_of_string tag_id)
+      | _ ->
+        assert false
+    in
+    Db.exec dbd f
+      "SELECT bug_id, tag_id FROM mantis_bug_tag_table;"
   in
   let query =
     "SELECT id, summary, priority, severity, category_id, date_submitted, last_updated, \
@@ -463,24 +445,4 @@ let main dbd =
     | _ ->
         assert false
   in
-  exec dbd ~f query
-
-let connect db =
-  try
-    let dbd = Mysql.connect db in
-    Mysql.set_charset dbd "utf8";
-    dbd
-  with Mysql.Error s ->
-    prerr_endline s;
-    exit 2
-
-let fetch db =
-  let dbd = connect db in
-  match main dbd with
-  | issues ->
-      Mysql.disconnect dbd;
-      issues
-  | exception e ->
-      Printf.eprintf "ERROR: %s\n%!" (Printexc.to_string e);
-      Mysql.disconnect dbd;
-      exit 2
+  Db.exec dbd f query
