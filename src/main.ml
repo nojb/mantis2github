@@ -96,8 +96,8 @@ module List = struct
 
   let rec truncate n = function
     | [] -> []
-    | _ :: l when n > 0 -> truncate (pred n) l
-    | _ as l -> l
+    | x :: l when n > 0 -> x :: truncate (pred n) l
+    | _ -> []
 end
 
 let import verbose (token, owner, repo) db assignee from nmax ids =
@@ -115,26 +115,30 @@ let import verbose (token, owner, repo) db assignee from nmax ids =
     let ids = List.truncate nmax ids in
     let ids = List.sort Stdlib.compare ids in
     let f (total_retries, total_time, count) id =
-      let issue = Hashtbl.find issues id in
-      let starttime = Unix.gettimeofday () in
-      let res =
-        Github.Issue.import ~verbose ?token ~owner ~repo
-          (Migrate.Issue.migrate ~gh_user issue)
-      in
-      let endtime = Unix.gettimeofday () in
-      let dt = endtime -. starttime in
-      let total_time = total_time +. dt in
-      let retries = match res with Ok (_, retries) | Error retries -> retries in
-      let total_retries = total_retries + retries in
-      let gh_id =
-        match res with
-        | Ok (id, _) -> string_of_int id
-        | Error _ -> "ERR"
-      in
-      Printf.printf "%4d %4s %2d %2d %6d %6.1f %6.1f %6.1f\n%!"
-        id gh_id retries (truncate (float total_retries /. float count))
-        total_retries dt (total_time /. float count) total_time;
-      (total_retries, total_time, succ count)
+      match Hashtbl.find_opt issues id with
+      | None ->
+          Printf.eprintf "No such issue: %d\n%!" id;
+          (total_retries, total_time, count)
+      | Some issue ->
+          let starttime = Unix.gettimeofday () in
+          let res =
+            Github.Issue.import ~verbose ?token ~owner ~repo
+              (Migrate.Issue.migrate ~gh_user issue)
+          in
+          let endtime = Unix.gettimeofday () in
+          let dt = endtime -. starttime in
+          let total_time = total_time +. dt in
+          let retries = match res with Ok (_, retries) | Error retries -> retries in
+          let total_retries = total_retries + retries in
+          let gh_id =
+            match res with
+            | Ok (id, _) -> string_of_int id
+            | Error _ -> "ERR"
+          in
+          Printf.printf "%4d %4s %2d %2d %6d %6.1f %6.1f %6.1f\n%!"
+            id gh_id retries (truncate (float total_retries /. float count))
+            total_retries dt (total_time /. float count) total_time;
+          (total_retries, total_time, succ count)
     in
     List.fold_left f (0, 0., 0) ids
   in

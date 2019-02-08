@@ -132,8 +132,8 @@ end = struct
       match String.trim contents with
       | "" -> l
       | body ->
-        let body = Printf.sprintf "#### %s\n\n%s" title body in
-        {Github.Issue.Comment.created_at = Some created_at; body} :: l
+          let body = Printf.sprintf "#### %s\n\n%s" title body in
+          {Github.Issue.Comment.created_at = Some created_at; body} :: l
     in
     note "Description" description
       (note "Steps to reproduce" steps_to_reproduce
@@ -154,8 +154,8 @@ end = struct
         priority;
         severity;
         category;
-        date_submitted = created_at;
-        last_updated = updated_at;
+        date_submitted;
+        last_updated;
         reporter;
         handler = assignee;
         description;
@@ -182,6 +182,8 @@ end = struct
     let labels = labels ~priority ~severity ~category ~status ~resolution in
     let milestone = milestone ~target_version in
     let closed = Mantis.Status.is_closed status in
+    let updated_at = timestamp last_updated in
+    let created_at = timestamp date_submitted in
     let closed_at =
       match closed_at, closed with
       | None, true -> Some updated_at
@@ -198,8 +200,8 @@ end = struct
     let extra_notes = extra_notes ~created_at ~description ~steps_to_reproduce ~additional_information in
     let issue =
       {Github.Issue.Issue.title; body;
-       created_at = Some (timestamp created_at);
-       updated_at = Some (timestamp updated_at);
+       created_at = Some created_at;
+       updated_at = Some updated_at;
        assignee; milestone; closed_at;
        closed = Some closed; labels}
     in
