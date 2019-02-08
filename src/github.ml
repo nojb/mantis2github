@@ -55,7 +55,6 @@ module Api = struct
         match data with
         | None -> ""
         | Some data ->
-            (* Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) data; *)
             let filename, oc = Filename.open_temp_file "curl" "data" in
             set_binary_mode_out oc true;
             Yojson.Basic.pretty_to_channel ~std:true oc data;
@@ -68,24 +67,28 @@ module Api = struct
         | l -> "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
       in
       let verbose = if verbose then "--verbose " else "" in
-      Printf.sprintf "curl -Ss %s%s%s-X %s %s%s%s"
+      Printf.sprintf "curl -L -Ss %s%s%s-X %s %s%s%s"
         verbose data headers (to_string meth) root route params
     in
     if verbose then Printf.eprintf "+ %s\n%!" cmd;
     let tmp = Filename.temp_file "curl" "out" in
-    assert (Sys.command (Printf.sprintf "%s > %s" cmd tmp) = 0);
+    let tmp_http_code = Filename.temp_file "curl" "code" in
+    assert (Sys.command (Printf.sprintf "%s -w '%%{http_code}\\n' -o %s > %s" cmd tmp tmp_http_code) = 0);
+    let ic = open_in tmp_http_code in
+    let code = input_line ic |> int_of_string in
+    close_in ic;
     let ic = open_in_bin tmp in
     let s = really_input_string ic (in_channel_length ic) in
     close_in ic;
     let json = Yojson.Basic.from_string s in
-    (* Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json; *)
-    match J.member "message" json with
-    | `String _ ->
-        let json = ["cmd", `String cmd; "res", json] in
-        let json = match data with None -> json | Some data -> ("data", data) :: json in
-        Error (`Assoc json)
-    | _ ->
-        Ok json
+    if code >= 400 then begin
+      let json = ["cmd", `String cmd; "res", json] in
+      let json = match data with None -> json | Some data -> ("data", data) :: json in
+      let json = `Assoc json in
+      Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+      None
+    end else
+      Some json
 
   let get ?verbose ?headers ?params ?token fmt =
     Printf.ksprintf (curl GET ?verbose ?headers ?params ?token) fmt
@@ -98,10 +101,9 @@ module Milestone = struct
   let list ?verbose ?token ~owner ~repo () =
     let params = ["state", "all"] in
     match Api.get ?verbose ~params ?token "/repos/%s/%s/milestones" owner repo with
-    | Error json ->
-        Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+    | None ->
         None
-    | Ok json ->
+    | Some json ->
         let f json =
           let title = json |> J.member "title" |> J.to_string in
           let number = json |> J.member "number" |> J.to_int in
@@ -180,8 +182,8 @@ module Issue = struct
 
   let is_imported ?verbose ?token ~owner ~repo id =
     match Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id with
-    | Error _ as x -> Some x
-    | Ok json ->
+    | None -> None
+    | Some json ->
         begin match json |> J.member "status" |> J.to_string with
         | "imported" ->
             let id =
@@ -203,10 +205,9 @@ module Issue = struct
   let import ?verbose ?token ~owner ~repo issue =
     let data = to_json issue in
     match Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo with
-    | Error json ->
-        Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+    | None ->
         Error 0
-    | Ok json ->
+    | Some json ->
         let id = json |> J.member "id" |> J.to_int in
         let rec loop n retries =
           Unix.sleep n;
@@ -243,8 +244,8 @@ module Gist = struct
   let create ?verbose ?token gist =
     let data = to_json gist in
     match Api.post ?verbose ~data ?token "/gists" with
-    | Ok json ->
-        Ok (J.member "html_url" json |> J.to_string)
-    | Error _ as x ->
-        x
+    | Some json ->
+        Some (J.member "html_url" json |> J.to_string)
+    | None ->
+        None
 end

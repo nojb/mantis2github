@@ -26,11 +26,11 @@
 module Api : sig
   val get:
     ?verbose:bool -> ?headers:(string * string) list -> ?params:(string * string) list ->
-    ?token:string -> ('a, unit, string, (Yojson.Basic.t, Yojson.Basic.t) result) format4 -> 'a
+    ?token:string -> ('a, unit, string, Yojson.Basic.t option) format4 -> 'a
 
   val post:
     ?verbose: bool -> ?headers:(string * string) list -> ?data:Yojson.Basic.t ->
-    ?token:string -> ('a, unit, string, (Yojson.Basic.t, Yojson.Basic.t) result) format4 -> 'a
+    ?token:string -> ('a, unit, string, Yojson.Basic.t option) format4 -> 'a
 end
 
 module Milestone : sig
@@ -85,5 +85,5 @@ module Gist : sig
     }
 
   val to_json: t -> Yojson.Basic.t
-  val create: ?verbose:bool -> ?token:string -> t -> (string, Yojson.Basic.t) result
+  val create: ?verbose:bool -> ?token:string -> t -> string option
 end
