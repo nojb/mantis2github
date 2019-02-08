@@ -144,6 +144,15 @@ let import verbose (token, owner, repo) db assignee from nmax ids =
   in
   Mantis.Db.use db (fun db -> ignore (f db))
 
+let largest_issue verbose (token, owner, repo) =
+  match Github.Issue.list ~verbose ?token ~owner ~repo () with
+  | None ->
+    prerr_endline "Could not retrieve issue numbers!"
+  | Some (id :: _) ->
+    print_endline (string_of_int id)
+  | Some [] ->
+    print_endline "No issues!"
+
 open Cmdliner
 
 let db_t =
@@ -226,6 +235,11 @@ let import_cmd =
   Term.(const import $ verbose_t $ github_t $ db_t $ assignee_t $ from_t $ nmax_t $ bug_ids_t),
   Term.info "import" ~doc
 
+let largest_issue_cmd =
+  let doc = "Largest issue number." in
+  Term.(const largest_issue $ verbose_t $ github_t),
+  Term.info "largest-issue" ~doc
+
 let default_cmd =
   let doc = "a Mantis => Github migration tool" in
   let sdocs = Manpage.s_common_options in
@@ -233,7 +247,7 @@ let default_cmd =
   Term.(ret (const (`Help (`Pager, None)))),
   Term.info "mantis2github" ~version:"v0.1" ~doc ~sdocs ~exits
 
-let cmds = [extract_cmd; milestones_cmd; import_cmd]
+let cmds = [extract_cmd; milestones_cmd; largest_issue_cmd; import_cmd]
 
 let () =
   Term.(exit (eval_choice default_cmd cmds))

@@ -67,13 +67,13 @@ module Api = struct
         | l -> "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
       in
       let verbose = if verbose then "--verbose " else "" in
-      Printf.sprintf "curl -L -Ss %s%s%s-X %s %s%s%s"
+      Printf.sprintf "curl -L -w '%%{http_code}\\n' -Ss %s%s%s-X %s '%s%s%s'"
         verbose data headers (to_string meth) root route params
     in
     if verbose then Printf.eprintf "+ %s\n%!" cmd;
     let tmp = Filename.temp_file "curl" "out" in
     let tmp_http_code = Filename.temp_file "curl" "code" in
-    assert (Sys.command (Printf.sprintf "%s -w '%%{http_code}\\n' -o %s > %s" cmd tmp tmp_http_code) = 0);
+    assert (Sys.command (Printf.sprintf "%s -o %s > %s" cmd tmp tmp_http_code) = 0);
     let ic = open_in tmp_http_code in
     let code = input_line ic |> int_of_string in
     close_in ic;
@@ -221,6 +221,12 @@ module Issue = struct
               loop (2 * n) (succ retries)
         in
         loop 1 0
+
+  let list ?verbose ?token ~owner ~repo () =
+    let params = ["state", "all"; "direction", "desc"] in
+    match Api.get ?verbose ?token ~params "/repos/%s/%s/issues" owner repo with
+    | None -> None
+    | Some json -> Some (json |> J.convert_each (fun json -> J.member "number" json |> J.to_int))
 end
 
 module Gist = struct
