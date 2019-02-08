@@ -52,27 +52,31 @@ module Label = struct
     | Crash -> "crash"
     | Block -> "block"
 
-  let of_priority = function
-    | Mantis.Priority.None | Normal -> []
-    | Low -> [Low_priority]
-    | High | Urgent -> [High_priority]
-    | Immediate -> [Critical]
+  module L = struct
+    type nonrec t = t list
 
-  let of_severity = function
-    | Mantis.Severity.Feature -> [Feature]
-    | Tweak | Trivial | Minor -> [Tweak]
-    | Text | Major -> []
-    | Crash -> [Crash]
-    | Block -> [Block]
+    let of_priority = function
+      | Mantis.Priority.None | Normal -> []
+      | Low -> [Low_priority]
+      | High | Urgent -> [High_priority]
+      | Immediate -> [Critical]
 
-  let of_resolution = function
-    | Mantis.Resolution.Open | Fixed | Reopened -> []
-    | Unable_to_duplicate -> [Unable_to_reproduce]
-    | Duplicate -> [Duplicate]
-    | Not_a_bug -> [No_change_required]
-    | Suspended -> [Suspended]
-    | Wont_fix -> [Wontfix]
-    | Not_fixable -> []
+    let of_severity = function
+      | Mantis.Severity.Feature -> [Feature]
+      | Tweak | Trivial | Minor -> [Tweak]
+      | Text | Major -> []
+      | Crash -> [Crash]
+      | Block -> [Block]
+
+    let of_resolution = function
+      | Mantis.Resolution.Open | Fixed | Reopened -> []
+      | Unable_to_duplicate -> [Unable_to_reproduce]
+      | Duplicate -> [Duplicate]
+      | Not_a_bug -> [No_change_required]
+      | Suspended -> [Suspended]
+      | Wont_fix -> [Wontfix]
+      | Not_fixable -> []
+  end
 end
 
 let badd buf title s =
@@ -128,9 +132,9 @@ end = struct
 
   let labels ~priority ~severity ~category:_ ~status:_ ~resolution =
     let l =
-      Label.of_priority priority @
-      Label.of_severity severity @
-      Label.of_resolution resolution
+      Label.L.of_priority priority @
+      Label.L.of_severity severity @
+      Label.L.of_resolution resolution
     in
     List.sort_uniq Stdlib.compare l |> List.map Label.to_string
 
