@@ -23,6 +23,58 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
+module Label = struct
+  type t =
+    | Duplicate
+    | No_change_required
+    | Unable_to_reproduce
+    | Wontfix
+    | Critical
+    | High_priority
+    | Low_priority
+    | Suspended
+    | Feature
+    | Tweak
+    | Crash
+    | Block
+
+  let to_string = function
+    | Duplicate -> "duplicate"
+    | No_change_required -> "no change required"
+    | Unable_to_reproduce -> "unable to reproduce"
+    | Wontfix -> "wontfix"
+    | Critical -> "critical"
+    | High_priority -> "high priority"
+    | Low_priority -> "low priority"
+    | Suspended -> "suspended"
+    | Feature -> "feature"
+    | Tweak -> "tweak"
+    | Crash -> "crash"
+    | Block -> "block"
+
+  let of_priority = function
+    | Mantis.Priority.None | Normal -> []
+    | Low -> [Low_priority]
+    | High | Urgent -> [High_priority]
+    | Immediate -> [Critical]
+
+  let of_severity = function
+    | Mantis.Severity.Feature -> [Feature]
+    | Tweak | Trivial | Minor -> [Tweak]
+    | Text | Major -> []
+    | Crash -> [Crash]
+    | Block -> [Block]
+
+  let of_resolution = function
+    | Mantis.Resolution.Open | Fixed | Reopened -> []
+    | Unable_to_duplicate -> [Unable_to_reproduce]
+    | Duplicate -> [Duplicate]
+    | Not_a_bug -> [No_change_required]
+    | Suspended -> [Suspended]
+    | Wont_fix -> [Wontfix]
+    | Not_fixable -> []
+end
+
 let badd buf title s =
   let fence = String.make 6 '`' in
   let s = String.trim s in
@@ -76,11 +128,11 @@ end = struct
 
   let labels ~priority ~severity ~category:_ ~status:_ ~resolution =
     let l =
-      Mantis.Priority.to_labels priority @
-      Mantis.Severity.to_labels severity @
-      Mantis.Resolution.to_labels resolution
+      Label.of_priority priority @
+      Label.of_severity severity @
+      Label.of_resolution resolution
     in
-    List.sort_uniq Stdlib.compare l |> List.map Mantis.Label.to_string
+    List.sort_uniq Stdlib.compare l |> List.map Label.to_string
 
   let milestone ~target_version:_ =
     None

@@ -46,36 +46,6 @@ let int s1 s2 l =
   | None -> l
   | Some s2 -> (s1, `Int s2) :: l
 
-module Label = struct
-  type t =
-    | Duplicate
-    | No_change_required
-    | Unable_to_reproduce
-    | Wontfix
-    | Critical
-    | High_priority
-    | Low_priority
-    | Suspended
-    | Feature
-    | Tweak
-    | Crash
-    | Block
-
-  let to_string = function
-    | Duplicate -> "duplicate"
-    | No_change_required -> "no change required"
-    | Unable_to_reproduce -> "unable to reproduce"
-    | Wontfix -> "wontfix"
-    | Critical -> "critical"
-    | High_priority -> "high priority"
-    | Low_priority -> "low priority"
-    | Suspended -> "suspended"
-    | Feature -> "feature"
-    | Tweak -> "tweak"
-    | Crash -> "crash"
-    | Block -> "block"
-end
-
 module Priority = struct
   type t =
     | None
@@ -101,12 +71,6 @@ module Priority = struct
     | High -> "high"
     | Urgent -> "urgent"
     | Immediate -> "immediate"
-
-  let to_labels = function
-    | None | Normal -> []
-    | Low -> [Label.Low_priority]
-    | High | Urgent -> [Label.High_priority]
-    | Immediate -> [Label.Critical]
 end
 
 module Severity = struct
@@ -140,13 +104,6 @@ module Severity = struct
     | Major -> "major"
     | Crash -> "crash"
     | Block -> "block"
-
-  let to_labels = function
-    | Feature -> Label.[Feature]
-    | Tweak | Trivial | Minor -> Label.[Tweak]
-    | Text | Major -> []
-    | Crash -> Label.[Crash]
-    | Block -> Label.[Block]
 
   let to_json x =
     `String (to_string x)
@@ -186,15 +143,6 @@ module Resolution = struct
     | 80 -> Suspended
     | 90 -> Wont_fix
     | n -> Printf.ksprintf failwith "Unexpected resolution code: %d" n
-
-  let to_labels = function
-    | Open | Fixed | Reopened -> []
-    | Unable_to_duplicate -> [Label.Unable_to_reproduce]
-    | Duplicate -> [Label.Duplicate]
-    | Not_a_bug -> [Label.No_change_required]
-    | Suspended -> [Label.Suspended]
-    | Wont_fix -> [Label.Wontfix]
-    | Not_fixable -> []
 
   let to_string = function
     | Open -> "open"
