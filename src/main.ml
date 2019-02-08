@@ -88,18 +88,7 @@ let milestones (token, owner, repo) =
   | None ->
       ()
 
-let create_issues (token, owner, repo) db bug_ids =
-  let issues = Mantis.Hashtbl.of_list (Mantis.fetch db) in
-  List.iter (fun id ->
-      let _ =
-        Github.Issue.import ?token ~owner ~repo
-          (Migrate.Issue.migrate ~gh_user:(fun _ -> None)
-             (Hashtbl.find issues id))
-      in
-      ()
-    ) bug_ids
-
-let migrate verbose (token, owner, repo) db assignee from nmax =
+let import verbose (token, owner, repo) db assignee from nmax _bug_ids =
   let issues = Mantis.Hashtbl.of_list (Mantis.fetch db) in
   let n = Hashtbl.length issues in
   let rec loop total_retries total count idx =
@@ -143,24 +132,24 @@ open Cmdliner
 let db_t =
   let docs = Manpage.s_options in
   let dbhost =
-    let doc = "Server hostname." in
-    Arg.(value & opt (some string) (Some "127.0.0.1") & info ["host"] ~docs ~doc)
+    let doc = "Database hostname." in
+    Arg.(value & opt (some string) (Some "127.0.0.1") & info ["dbhost"] ~docs ~doc)
   in
   let dbname =
     let doc = "Database name." in
-    Arg.(value & opt (some string) (Some "db") & info ["name"] ~docs ~doc)
+    Arg.(value & opt (some string) (Some "db") & info ["dbname"] ~docs ~doc)
   in
   let dbport =
-    let doc = "Server port." in
-    Arg.(value & opt (some int) None & info ["port"] ~docs ~doc)
+    let doc = "Database port." in
+    Arg.(value & opt (some int) None & info ["dbport"] ~docs ~doc)
   in
   let dbpwd =
-    let doc = "Server password." in
-    Arg.(value & opt (some string) None & info ["password"] ~docs ~doc)
+    let doc = "Database password." in
+    Arg.(value & opt (some string) None & info ["dbpassword"] ~docs ~doc)
   in
   let dbuser =
-    let doc = "Server username." in
-    Arg.(value & opt (some string) (Some "root") & info ["username"] ~docs ~doc)
+    let doc = "Database username." in
+    Arg.(value & opt (some string) (Some "root") & info ["dbusername"] ~docs ~doc)
   in
   let db dbhost dbname dbport dbpwd dbuser =
     {Mysql.dbhost; dbname; dbport; dbpwd; dbuser; dbsocket = None}
@@ -199,16 +188,11 @@ let github_t =
   Term.(const github $ owner $ repo $ token)
 
 let milestones_cmd =
-  let doc = "List milestones in ocaml/ocaml" in
+  let doc = "List Github milestones." in
   Term.(const milestones $ github_t),
   Term.info "milestones" ~doc
 
-let create_issue_cmd =
-  let doc = "Create an issue." in
-  Term.(const create_issues $ github_t $ db_t $ bug_ids_t),
-  Term.info "create-issue" ~doc ~sdocs:Manpage.s_common_options
-
-let force_assignee_t =
+let assignee_t =
   let doc = "Override assignee." in
   Arg.(value & opt (some string) None & info ["assignee"] ~doc)
 
@@ -220,19 +204,19 @@ let from_t =
   let doc = "Bug number to start importing from." in
   Arg.(value & opt int 0 & info ["from"] ~doc)
 
-let migrate_cmd =
-  let doc = "Migrate all issues." in
-  Term.(const migrate $ verbose_t $ github_t $ db_t $ force_assignee_t $ from_t $ nmax_t),
-  Term.info "migrate" ~doc
+let import_cmd =
+  let doc = "Import issues." in
+  Term.(const import $ verbose_t $ github_t $ db_t $ assignee_t $ from_t $ nmax_t $ bug_ids_t),
+  Term.info "import" ~doc
 
 let default_cmd =
-  let doc = "a Mantis => GH migration tool" in
+  let doc = "a Mantis => Github migration tool" in
   let sdocs = Manpage.s_common_options in
   let exits = Term.default_exits in
-  Term.(ret (const (fun _ -> `Help (`Pager, None)) $ const ())),
+  Term.(ret (const (`Help (`Pager, None)))),
   Term.info "mantis2github" ~version:"v0.1" ~doc ~sdocs ~exits
 
-let cmds = [extract_cmd; milestones_cmd; create_issue_cmd; migrate_cmd]
+let cmds = [extract_cmd; milestones_cmd; import_cmd]
 
 let () =
   Term.(exit (eval_choice default_cmd cmds))
