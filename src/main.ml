@@ -23,6 +23,46 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
+(* This list contains a mapping between Mantis user names and GH usernames.
+
+   Names appearing on this list are susceptible of being assigned migrated
+   issues. They must have sufficient permissions to do so and be a subset of
+   caml-devel subscribers. *)
+
+let gh_user = function
+  | "administrator" -> "bactrian"
+  | "xleroy" -> "xavierleroy"
+  (* | "remy" -> "diremy" *)
+  | "doligez" -> "damiendoligez"
+  | "garrigue" -> "garrigue"
+  | "frisch" -> "alainfrisch"
+  | "weis" -> "pierreweis"
+  (* | "mauny" -> "mauny" *)
+  | "avsm" -> "avsm"
+  | "dra" -> "dra27"
+  (* | "fpottier" -> "fpottier" *)
+  | "maranget" -> "maranget"
+  | "Sebastien_Hinderer"  | "shindere" -> "shindere"
+  | "yallop" -> "yallop"
+  | "chambart" -> "chambart"
+  | "shinwell" -> "mshinwell"
+  | "lefessan" -> "lefessan"
+  (* | "protz" -> "protz" *)
+  | "lpw25" -> "lpw25"
+  | "gasche" -> "gasche"
+  (* | "hongboz" -> "bobzhang" *)
+  (* | "jacques-henri.jourdan" -> "jhjourdan" *)
+  | "def" -> "let-def"
+  | "stedolan" -> "stedolan"
+  | "trefis" -> "trefis"
+  | "damien" -> "damiendoligez"
+  | "nojb" | "nojebar" -> "nojb"
+  | "octachron" -> "Octachron"
+  | "Armael" -> "Armael"
+  | "dim" -> "diml"
+  (* | "guesdon" -> "zoggy" *)
+  | _ -> raise Not_found
+
 let extract db = function
   | [] ->
       let f (_, issue) =
@@ -53,7 +93,8 @@ let create_issues (token, owner, repo) db bug_ids =
   List.iter (fun id ->
       let _ =
         Github.Issue.import ?token ~owner ~repo
-          (Mantis.Issue.to_json (Hashtbl.find issues id))
+          (Migrate.Issue.migrate ~gh_user:(fun _ -> None)
+             (Hashtbl.find issues id))
       in
       ()
     ) bug_ids
@@ -70,8 +111,13 @@ let migrate verbose (token, owner, repo) db assignee from nmax =
       | Some issue ->
           let starttime = Unix.gettimeofday () in
           let res =
+            let gh_user =
+              match assignee with
+              | None -> begin fun s -> try Some (gh_user s) with Not_found -> None end
+              | Some _ as x -> begin fun _ -> x end
+            in
             Github.Issue.import ~verbose ?token ~owner ~repo
-              (Mantis.Issue.to_json ?assignee issue)
+              (Migrate.Issue.migrate ~gh_user issue)
           in
           let endtime = Unix.gettimeofday () in
           let delta = endtime -. starttime in

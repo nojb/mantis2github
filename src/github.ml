@@ -110,7 +110,74 @@ module Milestone = struct
         Some (json |> J.to_list |> J.filter_map f)
 end
 
+let str s1 s2 l =
+  match s2 with
+  | None -> l
+  | Some s2 -> (s1, `String s2) :: l
+
+let bool s1 s2 l =
+  match s2 with
+  | None -> l
+  | Some s2 -> (s1, `Bool s2) :: l
+
+let int s1 s2 l =
+  match s2 with
+  | None -> l
+  | Some s2 -> (s1, `Int s2) :: l
+
 module Issue = struct
+  module Issue = struct
+    type t =
+      {
+        title: string;
+        body: string;
+        created_at: string option;
+        closed_at: string option;
+        updated_at: string option;
+        assignee: string option;
+        milestone: int option;
+        closed: bool option;
+        labels: string list;
+      }
+
+    let to_json
+        {title; body; created_at; closed_at; updated_at;
+         assignee; milestone; closed; labels}
+      =
+      let l = ("labels", `List (List.map (fun s -> `String s) labels)) :: [] in
+      let l = bool "closed" closed l in
+      let l = int "milestone" milestone l in
+      let l = str "assignee" assignee l in
+      let l = str "updated_at" updated_at l in
+      let l = str "closed_at" closed_at l in
+      let l = str "created_at" created_at l in
+      let l = ("body", `String body) :: l in
+      let l = ("title", `String title) :: l in
+      `Assoc l
+  end
+
+  module Comment = struct
+    type t =
+      {
+        created_at: string option;
+        body: string;
+      }
+
+    let to_json {created_at; body} =
+      let l = str "created_at" created_at [] in
+      let l = ("body", `String body) :: l in
+      `Assoc l
+  end
+
+  type t =
+    {
+      issue: Issue.t;
+      comments: Comment.t list;
+    }
+
+  let to_json {issue; comments} =
+    `Assoc ["issue", Issue.to_json issue; "comments", `List (List.map Comment.to_json comments)]
+
   let is_imported ?verbose ?token ~owner ~repo id =
     match Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id with
     | Error _ as x -> Some x
@@ -138,7 +205,8 @@ module Issue = struct
     | Ok json -> Ok (json |> J.member "id" |> J.to_int)
     | Error _ as x -> x
 
-  let import ?verbose ?token ~owner ~repo data =
+  let import ?verbose ?token ~owner ~repo issue =
+    let data = to_json issue in
     match start_import ?verbose ?token ~repo ~owner data with
     | Error json ->
         Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;

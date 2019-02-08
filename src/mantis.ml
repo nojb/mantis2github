@@ -31,54 +31,20 @@ module Hashtbl = struct
     h
 end
 
-let ostr s o l =
-  match o with
-  | Some x -> (s, `String x) :: l
+let str s1 s2 l =
+  match s2 with
   | None -> l
+  | Some s2 -> (s1, `String s2) :: l
 
-let oint s o l =
-  match o with
-  | Some x -> (s, `Int x) :: l
+let bool s1 s2 l =
+  match s2 with
   | None -> l
+  | Some s2 -> (s1, `Bool s2) :: l
 
-(* This file contains a mapping between Mantis user names and GH usernames.
-
-   Names appearing on this list are susceptible of being assigned migrated
-   issues. They must have sufficient permissions to do so and be a subset of
-   caml-devel subscribers. *)
-let gh_user = function
-  | "administrator" -> "bactrian"
-  | "xleroy" -> "xavierleroy"
-  (* | "remy" -> "diremy" *)
-  | "doligez" -> "damiendoligez"
-  | "garrigue" -> "garrigue"
-  | "frisch" -> "alainfrisch"
-  | "weis" -> "pierreweis"
-  (* | "mauny" -> "mauny" *)
-  | "avsm" -> "avsm"
-  | "dra" -> "dra27"
-  (* | "fpottier" -> "fpottier" *)
-  | "maranget" -> "maranget"
-  | "Sebastien_Hinderer"  | "shindere" -> "shindere"
-  | "yallop" -> "yallop"
-  | "chambart" -> "chambart"
-  | "shinwell" -> "mshinwell"
-  | "lefessan" -> "lefessan"
-  (* | "protz" -> "protz" *)
-  | "lpw25" -> "lpw25"
-  | "gasche" -> "gasche"
-  (* | "hongboz" -> "bobzhang" *)
-  (* | "jacques-henri.jourdan" -> "jhjourdan" *)
-  | "def" -> "let-def"
-  | "stedolan" -> "stedolan"
-  | "trefis" -> "trefis"
-  | "damien" -> "damiendoligez"
-  | "nojb" | "nojebar" -> "nojb"
-  | "octachron" -> "Octachron"
-  | "Armael" -> "Armael"
-  | "dim" -> "diml"
-  (* | "guesdon" -> "zoggy" *)
-  | _ -> raise Not_found
+let int s1 s2 l =
+  match s2 with
+  | None -> l
+  | Some s2 -> (s1, `Int s2) :: l
 
 module Label = struct
   type t =
@@ -181,6 +147,9 @@ module Severity = struct
     | Text | Major -> []
     | Crash -> Label.[Crash]
     | Block -> Label.[Block]
+
+  let to_json x =
+    `String (to_string x)
 end
 
 module Resolution = struct
@@ -226,6 +195,20 @@ module Resolution = struct
     | Suspended -> [Label.Suspended]
     | Wont_fix -> [Label.Wontfix]
     | Not_fixable -> []
+
+  let to_string = function
+    | Open -> "open"
+    | Fixed -> "fixed"
+    | Reopened -> "reopened"
+    | Unable_to_duplicate -> "unable to duplicate"
+    | Not_fixable -> "not fixable"
+    | Duplicate -> "duplicate"
+    | Not_a_bug -> "not a bug"
+    | Suspended -> "suspended"
+    | Wont_fix -> "won't fix"
+
+  let to_json x =
+    `String (to_string x)
 end
 
 module Status = struct
@@ -265,11 +248,6 @@ module Status = struct
     `String (to_string st)
 end
 
-let badd buf title s =
-  let fence = String.make 6 '`' in
-  let s = String.trim s in
-  if s <> "" then Printf.bprintf buf "**%s**\n%s\n%s\n%s\n" title fence s fence
-
 module Note = struct
   type t =
     {
@@ -279,19 +257,12 @@ module Note = struct
       date_submitted: string;
     }
 
-  let to_json {reporter; text; last_modified = _; date_submitted} =
-    let reporter = match reporter with None -> "" | Some s -> s in
-    let text =
-      let buf = Buffer.create 101 in
-      badd buf "Reporter" reporter;
-      badd buf "Body" text;
-      Buffer.contents buf
-    in
-    `Assoc
-      [
-        "body", `String text;
-        "created_at", `String date_submitted;
-      ]
+  let to_json {reporter; text; last_modified; date_submitted} =
+    let l = ("date_submitted", `String date_submitted) :: [] in
+    let l = ("last_modified", `String last_modified) :: l in
+    let l = ("text", `String text) :: l in
+    let l = str "reporter" reporter l in
+    `Assoc l
 end
 
 module Issue = struct
@@ -320,46 +291,7 @@ module Issue = struct
       tags: string list;
     }
 
-  let body ~id ?(reporter = "") ~tags ~category ~version ~target_version ~fixed_in_version
-      ~priority ~severity
-      ~description ~steps_to_reproduce ~additional_information ~related:_
-    =
-    let buf = Buffer.create 101 in
-    let info =
-      let combine l =
-        let l = List.map (fun (s1, s2) -> (s1, String.trim s2)) l in
-        let l = List.filter (function (_, "") -> false | _ -> true) l in
-        String.concat "\n" (List.map (fun (s1, s2) -> s1 ^ ": " ^ s2) l)
-      in
-      combine
-        [ "ID", string_of_int id;
-          "Reporter", reporter;
-          "Version", version;
-          "Target version", target_version;
-          "Fixed in version", fixed_in_version;
-          "Category", category;
-          "Priority", Priority.to_string priority;
-          "Severity", Severity.to_string severity;
-          "Tags", String.concat ", " tags ];
-    in
-    badd buf "Original bug information" info;
-    badd buf "Description" description;
-    badd buf "Steps to reproduce" steps_to_reproduce;
-    badd buf "Additional information" additional_information;
-    Buffer.contents buf
-
-  let labels ~priority ~severity ~category:_ ~status:_ ~resolution =
-    let l =
-      Priority.to_labels priority @
-      Severity.to_labels severity @
-      Resolution.to_labels resolution
-    in
-    List.sort_uniq Stdlib.compare l |> List.map Label.to_string
-
-  let milestone ~target_version:_ =
-    None
-
-  let to_json ?assignee
+  let to_json
       {
         id;
         summary;
@@ -384,48 +316,29 @@ module Issue = struct
         tags;
       }
     =
-    let summary = if summary = "" then "*no title*" else summary in
-    let body =
-      body ~id ?reporter ~tags ~category ~version ~target_version ~fixed_in_version
-        ~priority ~severity
-        ~description ~steps_to_reproduce ~additional_information ~related
-    in
-    let labels = labels ~priority ~severity ~category ~status ~resolution in
-    let milestone = milestone ~target_version in
-    let closed = Status.is_closed status in
-    let closed_at =
-      match closed_at, closed with
-      | None, true -> Some last_updated
-      | None, false -> None
-      | Some _ as x, _ -> x
-    in
-    let handler =
-      match handler with
-      | Some s ->
-          begin try Some (gh_user s) with Not_found -> None end
-      | None ->
-          None
-    in
-    let handler =
-      match handler with
-      | Some _ -> assignee
-      | None -> None
-    in
-    let issue =
-      ostr "assignee" handler @@
-      ostr "closed_at" closed_at @@
-      oint "milestone" milestone @@
-      [
-        "title", `String summary;
-        "body", `String body;
-        "created_at", `String date_submitted;
-        "updated_at", `String last_updated;
-        "closed", `Bool closed;
-        "labels", `List (List.map (fun s -> `String s) labels);
-      ]
-    in
-    let comments = List.map Note.to_json notes in
-    `Assoc ["issue", `Assoc issue; "comments", `List comments]
+    let l = [] in
+    let l = ("tags", `List (List.map (fun s -> `String s) tags)) :: l in
+    let l = ("related", `List (List.map (fun n -> `Int n) related)) :: l in
+    let l = ("resolution", Resolution.to_json resolution) :: l in
+    let l = str "closed_at" closed_at l in
+    let l = ("status", Status.to_json status) :: l in
+    let l = ("notes", `List (List.map Note.to_json notes)) :: l in
+    let l = ("fixed_in_version", `String fixed_in_version) :: l in
+    let l = ("target_version", `String target_version) :: l in
+    let l = ("version", `String version) :: l in
+    let l = ("additional_information", `String additional_information) :: l in
+    let l = ("steps_to_reproduce", `String steps_to_reproduce) :: l in
+    let l = ("description", `String description) :: l in
+    let l = str "handler" handler l in
+    let l = str "reporter" reporter l in
+    let l = ("last_updated", `String last_updated) :: l in
+    let l = ("date_submitted", `String date_submitted) :: l in
+    let l = ("category", `String category) :: l in
+    let l = ("severity", `String (Severity.to_string severity)) :: l in
+    let l = ("priority", `String (Priority.to_string priority)) :: l in
+    let l = ("summary", `String summary) :: l in
+    let l = ("id", `Int id) :: l in
+    `Assoc l
 end
 
 let exec dbd ~f query =
