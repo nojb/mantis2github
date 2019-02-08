@@ -121,17 +121,6 @@ module Resolution = struct
     | Suspended
     | Wont_fix
 
-  let to_int = function
-    | Open -> 10
-    | Fixed -> 20
-    | Reopened -> 30
-    | Unable_to_duplicate -> 40
-    | Not_fixable -> 50
-    | Duplicate -> 60
-    | Not_a_bug -> 70
-    | Suspended -> 80
-    | Wont_fix -> 90
-
   let of_int = function
     | 10 -> Open
     | 20 -> Fixed
