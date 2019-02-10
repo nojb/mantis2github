@@ -107,13 +107,16 @@ module Issue = struct
       ~priority ~severity ~related
     =
     let combine l =
-      let l = List.map (fun (s1, s2) -> (s1, String.trim s2)) l in
-      let l = List.filter (function (_, "") -> false | _ -> true) l in
-      String.concat "\n" (List.map (fun (s1, s2) -> Printf.sprintf "*%s:* %s" s1 s2) l)
+      l
+      |> List.map (fun (s1, s2) -> s1, String.trim s2)
+      |> List.filter (function (_, "") -> false | _ -> true)
+      |> List.map (fun (s1, s2) -> Printf.sprintf "*%s:* %s" s1 s2)
+      |> String.concat "\n"
     in
     let see_also =
-      String.concat ", "
-        (List.map (fun (id, gh_id) -> Printf.sprintf "#%d (MPR#%d)" gh_id id) related)
+      related
+      |> List.map (fun (_, gh_id) -> Printf.sprintf "#%d" gh_id)
+      |> String.concat ", "
     in
     combine
       [
@@ -126,7 +129,7 @@ module Issue = struct
         "Priority", Mantis.Priority.to_string priority;
         "Severity", Mantis.Severity.to_string severity;
         "Tags", String.concat ", " tags;
-        "See also", see_also;
+        "Related to", see_also;
       ]
 
   let extra_notes
