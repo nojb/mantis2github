@@ -113,7 +113,7 @@ module Issue = struct
     in
     let see_also =
       String.concat ", "
-        (List.map (fun (id, gh_id) -> Printf.sprintf "%d (#%d)" id gh_id) related)
+        (List.map (fun (id, gh_id) -> Printf.sprintf "#%d (MPR#%d)" gh_id id) related)
     in
     combine
       [
