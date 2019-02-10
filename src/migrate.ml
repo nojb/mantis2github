@@ -195,7 +195,17 @@ module Issue = struct
     =
     let title = if summary = "" then "*no title*" else summary in
     let body =
-      let related = List.map (fun id -> id, gh_ids id) related in
+      let related =
+        List.filter (fun id' ->
+            match gh_ids id' with
+            | _ ->
+                true
+            | exception Not_found ->
+                Printf.eprintf "WARNING: related issue %d to %d not found\n%!" id' id;
+                false
+          ) related
+        |> List.map (fun id -> id, gh_ids id)
+      in
       body
         ~id ?reporter ~tags ~category
         ~version ~target_version ~fixed_in_version

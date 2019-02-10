@@ -271,7 +271,7 @@ module Gist = struct
   let to_json {files; description; public} =
     let files =
       List.map (fun (name, contents) ->
-          name, `Assoc ["contents", `String contents]
+          name, `Assoc ["content", `String contents]
         ) files
     in
     `Assoc [ "files", `Assoc files;
