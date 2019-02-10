@@ -86,9 +86,7 @@ let timestamp s =
   Printf.sprintf "%04d-%02d-%02dT%02d:%02d:%02dZ"
     (tm_year + 1900) (tm_mon + 1) tm_mday tm_hour tm_min tm_sec
 
-module Note : sig
-  val migrate: Mantis.Note.t -> Github.Issue.Comment.t
-end = struct
+module Note = struct
   let migrate {Mantis.Note.reporter; text; last_modified = _; date_submitted} =
     let body =
       let reporter =
@@ -102,21 +100,24 @@ end = struct
     {Github.Issue.Comment.body; created_at = Some (timestamp date_submitted)}
 end
 
-module Issue : sig
-  val migrate: gh_user:(string -> string option) -> Mantis.Issue.t -> Github.Issue.t
-end = struct
+module Issue = struct
   let body
       ~id ?(reporter = "") ~tags ~category
       ~version ~target_version ~fixed_in_version
-      ~priority ~severity ~related:_
+      ~priority ~severity ~related
     =
     let combine l =
       let l = List.map (fun (s1, s2) -> (s1, String.trim s2)) l in
       let l = List.filter (function (_, "") -> false | _ -> true) l in
       String.concat "\n" (List.map (fun (s1, s2) -> Printf.sprintf "*%s:* %s" s1 s2) l)
     in
+    let see_also =
+      String.concat ", "
+        (List.map (fun (id, gh_id) -> Printf.sprintf "%d (#%d)" id gh_id) related)
+    in
     combine
-      [ "Mantis ID", string_of_int id;
+      [
+        "Mantis ID", string_of_int id;
         "Reporter", reporter;
         "Version", version;
         "Target version", target_version;
@@ -124,7 +125,9 @@ end = struct
         "Category", category;
         "Priority", Mantis.Priority.to_string priority;
         "Severity", Mantis.Severity.to_string severity;
-        "Tags", String.concat ", " tags ]
+        "Tags", String.concat ", " tags;
+        "See also", see_also;
+      ]
 
   let extra_notes ~created_at ~description ~steps_to_reproduce ~additional_information =
     let note title contents l =
@@ -151,7 +154,7 @@ end = struct
   let milestone ~target_version:_ =
     None
 
-  let migrate ~gh_user
+  let migrate ~gh_user ~gh_ids
       {
         Mantis.Issue.id;
         summary;
@@ -178,6 +181,7 @@ end = struct
     =
     let title = if summary = "" then "*no title*" else summary in
     let body =
+      let related = List.map (fun id -> id, gh_ids id) related in
       body
         ~id ?reporter ~tags ~category
         ~version ~target_version ~fixed_in_version

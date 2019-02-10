@@ -231,11 +231,33 @@ module Issue = struct
         in
         loop 1 0
 
-  let list ?verbose ?token ~owner ~repo () =
-    let params = ["state", "all"; "direction", "desc"] in
-    match Api.get ?verbose ?token ~params "/repos/%s/%s/issues" owner repo with
+  let count ?verbose ?token ~owner ~repo () =
+    let query =
+      Printf.sprintf {|
+query {
+  repository(owner:"%s", name:"%s") {
+    pullRequests {
+      totalCount
+    }
+    issues {
+      totalCount
+    }
+  }
+}
+    |} owner repo
+    in
+    let data = `Assoc ["query", `String query] in
+    match Api.post ?verbose ?token ~data "/graphql" with
     | None -> None
-    | Some json -> Some (json |> J.convert_each (fun json -> J.member "number" json |> J.to_int))
+    | Some json ->
+        let json =
+          json
+          |> J.member "data"
+          |> J.member "repository"
+        in
+        let pr_count = json |> J.member "pullRequests" |> J.member "totalCount" |> J.to_int in
+        let issue_count = json |> J.member "issues" |> J.member "totalCount" |> J.to_int in
+        Some (pr_count + issue_count)
 end
 
 module Gist = struct

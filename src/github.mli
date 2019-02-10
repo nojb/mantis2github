@@ -78,7 +78,7 @@ module Issue : sig
   val to_json: t -> Yojson.Basic.t
 
   val import: ?verbose:bool -> ?token:string -> owner:string -> repo:string -> t -> (int * int, int) result
-  val list: ?verbose:bool -> ?token:string -> owner:string -> repo:string -> unit -> int list option
+  val count: ?verbose:bool -> ?token:string -> owner:string -> repo:string -> unit -> int option
 end
 
 module Gist : sig

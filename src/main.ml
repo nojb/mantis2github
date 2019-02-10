@@ -29,6 +29,27 @@
    issues. They must have sufficient permissions to do so and be a subset of
    caml-devel subscribers. *)
 
+module List = struct
+  include List
+
+  let rec truncate n = function
+    | [] -> []
+    | x :: l when n > 0 -> x :: truncate (pred n) l
+    | _ -> []
+end
+
+let with_out s f =
+  let oc = open_out s in
+  match f oc with
+  | r ->
+      close_out oc;
+      Printf.eprintf "[OK] Wrote %s.\n%!" s;
+      r
+  | exception exn ->
+      close_out oc;
+      Printf.eprintf "[ERR] Could not write %s.\n%!" s;
+      raise exn
+
 let gh_user = function
   | "administrator" -> "bactrian"
   | "xleroy" -> "xavierleroy"
@@ -91,71 +112,18 @@ let milestones (token, owner, repo) =
   | None ->
       ()
 
-module List = struct
-  include List
-
-  let rec truncate n = function
-    | [] -> []
-    | x :: l when n > 0 -> x :: truncate (pred n) l
-    | _ -> []
-end
-
-let import verbose (token, owner, repo) db assignee from nmax ids =
-  let gh_user =
-    match assignee with
-    | None -> begin fun s -> try Some (gh_user s) with Not_found -> None end
-    | Some _ as x -> begin fun _ -> x end
-  in
-  let f db =
-    let issues = Mantis.fetch db in
-    let ids =
-      if ids = [] then Hashtbl.fold (fun id _ acc -> id :: acc) issues [] else ids
-    in
-    let ids = List.filter (fun id -> id >= from) ids in
-    let ids = List.truncate nmax ids in
-    let ids = List.sort Stdlib.compare ids in
-    let f (total_retries, total_time, count) id =
-      match Hashtbl.find_opt issues id with
-      | None ->
-          Printf.eprintf "No such issue: %d\n%!" id;
-          (total_retries, total_time, count)
-      | Some issue ->
-          let starttime = Unix.gettimeofday () in
-          let res =
-            Github.Issue.import ~verbose ?token ~owner ~repo
-              (Migrate.Issue.migrate ~gh_user issue)
-          in
-          let endtime = Unix.gettimeofday () in
-          let dt = endtime -. starttime in
-          let total_time = total_time +. dt in
-          let retries = match res with Ok (_, retries) | Error retries -> retries in
-          let total_retries = total_retries + retries in
-          let gh_id =
-            match res with
-            | Ok (id, _) -> string_of_int id
-            | Error _ -> "ERR"
-          in
-          Printf.printf "%4d %4s %2d %2d %6d %6.1f %6.1f %6.1f\n%!"
-            id gh_id retries (truncate (float total_retries /. float count))
-            total_retries dt (total_time /. float count) total_time;
-          (total_retries, total_time, succ count)
-    in
-    List.fold_left f (0, 0., 0) ids
-  in
-  Mantis.Db.use db (fun db -> ignore (f db))
-
-let largest_issue verbose (token, owner, repo) =
-  match Github.Issue.list ~verbose ?token ~owner ~repo () with
-  | None ->
-    failwith "Could not retrieve issue numbers!"
-  | Some (id :: _) ->
-    id
-  | Some [] ->
-    failwith "No issues!"
+(* let largest_issue verbose (token, owner, repo) = *)
+(*   match Github.Issue.count ~verbose ?token ~owner ~repo () with *)
+(*   | None -> *)
+(*     failwith "Could not retrieve issue numbers!" *)
+(*   | Some (id :: _) -> *)
+(*     id *)
+(*   | Some [] -> *)
+(*     failwith "No issues!" *)
 
 module IntSet = Set.Make (struct type t = int let compare = Stdlib.compare end)
 
-let assignment verbose (token, owner, repo) db =
+let assignment db next =
   let rec go assigned unassigned next = function
     | id :: ids as ids' ->
       if id < next then
@@ -164,8 +132,12 @@ let assignment verbose (token, owner, repo) db =
         go ((id, next) :: assigned) unassigned (succ next) ids
       else (* id > next *)
         begin match IntSet.min_elt_opt unassigned with
-        | None -> failwith "something bad"
-        | Some id -> go ((id, next) :: assigned) (IntSet.remove id unassigned) (succ next) ids'
+        | None ->
+            Printf.eprintf "[WARNING] gap cannot be filled by unassigned issues (id=%d,next=%d)"
+              id next;
+            go ((id, next) :: assigned) unassigned (succ next) ids
+        | Some id ->
+            go ((id, next) :: assigned) (IntSet.remove id unassigned) (succ next) ids'
         end
     | [] ->
       let rec loop unassigned assigned next =
@@ -175,13 +147,53 @@ let assignment verbose (token, owner, repo) db =
       in
       loop unassigned assigned next
   in
-  let largest = largest_issue verbose (token, owner, repo) in
+  (* let largest = largest_issue verbose (token, owner, repo) in *)
   let issues = Mantis.Db.use db Mantis.fetch in
-  Hashtbl.fold (fun id _ acc -> id :: acc) issues []
-  |> List.sort Stdlib.compare
-  |> go [] IntSet.empty (succ largest)
-  |> List.sort (fun (_, gh_id1) (_, gh_id2) -> Stdlib.compare gh_id1 gh_id2)
-  |> List.iter (fun (id, gh_id) -> Printf.printf "%4d %4d\n" id gh_id)
+  let a =
+    Hashtbl.fold (fun id _ acc -> id :: acc) issues []
+    |> List.sort Stdlib.compare
+    |> go [] IntSet.empty next
+    |> List.sort (fun (_, gh_id1) (_, gh_id2) -> Stdlib.compare gh_id1 gh_id2)
+  in
+  with_out "assign.txt" (fun oc ->
+      List.iter (fun (id, gh_id) ->
+          Printf.fprintf oc "%4d %4d\n" id gh_id
+        ) a
+    );
+  List.map (fun (id, gh_id) -> Hashtbl.find issues id, gh_id) a
+
+let import verbose dry_run (token, owner, repo) db assignee next =
+  let issues = assignment db next in
+  let gh_user =
+    match assignee with
+    | None -> begin fun s -> try Some (gh_user s) with Not_found -> None end
+    | Some _ as x -> begin fun _ -> x end
+  in
+  let gh_ids =
+    let h = Hashtbl.create (List.length issues) in
+    List.iter (fun (issue, gh_id) -> Hashtbl.add h issue.Mantis.Issue.id gh_id) issues;
+    Hashtbl.find h
+  in
+  let f (total_retries, total_time, count) (issue, gh_id) =
+    let gh_issue = Migrate.Issue.migrate ~gh_user ~gh_ids issue in
+    let starttime = Unix.gettimeofday () in
+    match Github.Issue.import ~verbose ?token ~owner ~repo gh_issue with
+    | Error _ ->
+        failwith "Import failed! Abort"
+    | Ok (gh_id', retries) ->
+        if gh_id <> gh_id' then
+          Printf.ksprintf failwith "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)"
+            issue.Mantis.Issue.id gh_id gh_id';
+        let endtime = Unix.gettimeofday () in
+        let dt = endtime -. starttime in
+        let total_time = total_time +. dt in
+        let total_retries = total_retries + retries in
+        Printf.printf "%4d %4d %2d %2d %6d %6.1f %6.1f %6.1f\n%!"
+          issue.Mantis.Issue.id gh_id retries (truncate (float total_retries /. float count))
+          total_retries dt (total_time /. float count) total_time;
+        (total_retries, total_time, succ count)
+  in
+  if not dry_run then List.fold_left f (0, 0., 0) issues |> ignore
 
 open Cmdliner
 
@@ -249,23 +261,18 @@ let assignee_t =
   let doc = "Override assignee." in
   Arg.(value & opt (some string) None & info ["assignee"] ~doc)
 
-let nmax_t =
-  let doc = "Max number of issues to migrate." in
-  Arg.(value & opt int max_int & info ["max"] ~doc)
+let dry_run_t =
+  let doc = "Dry run." in
+  Arg.(value & flag & info ["dry-run"] ~doc)
 
-let from_t =
-  let doc = "Bug number to start importing from." in
-  Arg.(value & opt int 0 & info ["from"] ~doc)
+let next_t =
+  let doc = "Next issue number." in
+  Arg.(required & pos 1 (some int) None & info [] ~doc)
 
 let import_cmd =
   let doc = "Import issues." in
-  Term.(const import $ verbose_t $ github_t $ db_t $ assignee_t $ from_t $ nmax_t $ bug_ids_t),
+  Term.(const import $ verbose_t $ dry_run_t $ github_t $ db_t $ assignee_t $ next_t),
   Term.info "import" ~doc
-
-let assignment_cmd =
-  let doc = "Compute issue assignment." in
-  Term.(const assignment $ verbose_t $ github_t $ db_t),
-  Term.info "assignment" ~doc
 
 let default_cmd =
   let doc = "a Mantis => Github migration tool" in
@@ -289,7 +296,6 @@ let cmds =
     extract_cmd;
     milestones_cmd;
     import_cmd;
-    assignment_cmd;
     labels_cmd;
   ]
 

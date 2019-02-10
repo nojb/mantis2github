@@ -28,5 +28,7 @@ module Note : sig
 end
 
 module Issue : sig
-  val migrate: gh_user:(string -> string option) -> Mantis.Issue.t -> Github.Issue.t
+  val migrate:
+    gh_user:(string -> string option) -> gh_ids:(int -> int) ->
+    Mantis.Issue.t -> Github.Issue.t
 end
