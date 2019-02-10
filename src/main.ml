@@ -112,18 +112,9 @@ let milestones (token, owner, repo) =
   | None ->
       ()
 
-(* let largest_issue verbose (token, owner, repo) = *)
-(*   match Github.Issue.count ~verbose ?token ~owner ~repo () with *)
-(*   | None -> *)
-(*     failwith "Could not retrieve issue numbers!" *)
-(*   | Some (id :: _) -> *)
-(*     id *)
-(*   | Some [] -> *)
-(*     failwith "No issues!" *)
-
 module IntSet = Set.Make (struct type t = int let compare = Stdlib.compare end)
 
-let assignment db next =
+let assignment db next bug_ids =
   let rec go assigned unassigned next = function
     | id :: ids as ids' ->
       if id < next then
@@ -133,7 +124,8 @@ let assignment db next =
       else (* id > next *)
         begin match IntSet.min_elt_opt unassigned with
         | None ->
-            Printf.eprintf "[WARNING] gap cannot be filled by unassigned issues (id=%d,next=%d)"
+            Printf.eprintf
+              "[WARNING] gap cannot be filled by unassigned issues (id=%d,next=%d)\n%!"
               id next;
             go ((id, next) :: assigned) unassigned (succ next) ids
         | Some id ->
@@ -147,8 +139,19 @@ let assignment db next =
       in
       loop unassigned assigned next
   in
-  (* let largest = largest_issue verbose (token, owner, repo) in *)
-  let issues = Mantis.Db.use db Mantis.fetch in
+  let issues =
+    let issues = Mantis.Db.use db Mantis.fetch in
+    if bug_ids = [] then issues
+    else begin
+      let h = Hashtbl.create (List.length bug_ids) in
+      List.iter (fun id ->
+          match Hashtbl.find_opt issues id with
+          | None -> Printf.eprintf "WARNING: no bug with id=%d\n%!" id
+          | Some issue -> Hashtbl.replace h id issue
+        ) bug_ids;
+      h
+    end
+  in
   let a =
     Hashtbl.fold (fun id _ acc -> id :: acc) issues []
     |> List.sort Stdlib.compare
@@ -162,8 +165,15 @@ let assignment db next =
     );
   List.map (fun (id, gh_id) -> Hashtbl.find issues id, gh_id) a
 
-let import verbose dry_run (token, owner, repo) db assignee next =
-  let issues = assignment db next in
+let import verbose dry_run (token, owner, repo) db assignee bug_ids =
+  let next =
+    match Github.Issue.count ~verbose ?token ~owner ~repo () with
+    | None ->
+        failwith "Could not count issues!"
+    | Some n ->
+        succ n
+  in
+  let issues = assignment db next bug_ids in
   let gh_user =
     match assignee with
     | None -> begin fun s -> try Some (gh_user s) with Not_found -> None end
@@ -274,13 +284,9 @@ let dry_run_t =
   let doc = "Dry run." in
   Arg.(value & flag & info ["dry-run"] ~doc)
 
-let next_t =
-  let doc = "Next issue number." in
-  Arg.(required & pos 1 (some int) None & info [] ~doc)
-
 let import_cmd =
   let doc = "Import issues." in
-  Term.(const import $ verbose_t $ dry_run_t $ github_t $ db_t $ assignee_t $ next_t),
+  Term.(const import $ verbose_t $ dry_run_t $ github_t $ db_t $ assignee_t $ bug_ids_t),
   Term.info "import" ~doc
 
 let default_cmd =

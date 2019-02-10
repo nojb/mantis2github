@@ -1,12 +1,9 @@
-OWNER=nojb
+OWNER=mantismigrationtest-123
 REPO=ocaml-mantis-wip
 PROG=_build/install/default/bin/mantis2github
 
-FLAGS=--owner $(OWNER) --repo $(REPO) --token $(TOKEN)
+FLAGS=$(OWNER)/$(REPO) --token $(TOKEN) --assignee $(OWNER)
 
-ifdef FROM
-FLAGS += --from $(FROM)
-endif
 ifdef VERBOSE
 FLAGS += --verbose
 endif
@@ -21,4 +18,4 @@ all:
 
 .PHONY: migrate
 migrate: all
-	$(PROG) migrate $(FLAGS) 2> err.txt | tee out.txt
+	$(PROG) import $(FLAGS) $(BUGS) 2>&1 | tee out.txt

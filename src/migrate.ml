@@ -159,6 +159,7 @@ module Issue = struct
             (note "File attachments" file_attachments [])))
 
   let labels ~priority ~severity ~category:_ ~status:_ ~resolution =
+    if true then [] else
     Label.L.(of_priority priority @ of_severity severity @ of_resolution resolution)
     |> List.sort_uniq Stdlib.compare
     |> List.map Label.to_string
