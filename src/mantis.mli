@@ -110,7 +110,7 @@ module Issue : sig
       fixed_in_version: string;
       notes: Note.t list;
       status: Status.t;
-      closed_at: string option;
+      history: (string * Status.t) option;
       resolution: Resolution.t;
       related: int list;
       tags: string list;

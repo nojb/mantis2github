@@ -215,7 +215,7 @@ module Issue = struct
       fixed_in_version: string;
       notes: Note.t list;
       status: Status.t;
-      closed_at: string option;
+      history: (string * Status.t) option;
       resolution: Resolution.t;
       related: int list;
       tags: string list;
@@ -240,7 +240,7 @@ module Issue = struct
         fixed_in_version;
         notes;
         status;
-        closed_at;
+        history;
         resolution;
         related;
         tags;
@@ -250,7 +250,12 @@ module Issue = struct
     let l = ("tags", `List (List.map (fun s -> `String s) tags)) :: l in
     let l = ("related", `List (List.map (fun n -> `Int n) related)) :: l in
     let l = ("resolution", Resolution.to_json resolution) :: l in
-    let l = str "closed_at" closed_at l in
+    let l =
+      match history with
+      | None -> l
+      | Some (at, st) ->
+          ("history", `List [`String at; Status.to_json st]) :: l
+    in
     let l = ("status", Status.to_json status) :: l in
     let l = ("notes", `List (List.map Note.to_json notes)) :: l in
     let l = ("fixed_in_version", `String fixed_in_version) :: l in
@@ -348,7 +353,7 @@ let fetch dbd =
        last_modified, date_submitted \
        FROM mantis_bugnote_table ORDER BY date_submitted DESC;"
   in
-  let statuses =
+  let history =
     let f = function
       | [|bug_id; date_modified; new_value|] ->
           int_of_string bug_id,
@@ -414,13 +419,12 @@ let fetch dbd =
         in
         let notes = Hashtbl.find_all notes id in
         let status = Status.of_int (int_of_string status) in
-        let closed_at =
-          match Hashtbl.find_opt statuses id with
-          | None -> None
-          | Some (closed_at, st) ->
-              assert (st = status);
-              if Status.is_closed status then Some closed_at else None
-        in
+        let history = Hashtbl.find_opt history id in
+        (*   | None -> None *)
+        (*   | Some (closed_at, st) -> *)
+        (*       assert (st = status); *)
+        (*       if Status.is_closed status then Some closed_at else None *)
+        (* in *)
         let resolution = Resolution.of_int (int_of_string resolution) in
         let related = List.sort Stdlib.compare (Hashtbl.find_all relationships id) in
         let tags = Hashtbl.find_all tags id in
@@ -431,7 +435,7 @@ let fetch dbd =
           date_submitted; last_updated; reporter; handler;
           description; steps_to_reproduce; additional_information;
           version; target_version; fixed_in_version;
-          notes; status; closed_at; resolution; related; tags }
+          notes; status; history; resolution; related; tags }
     | _ ->
         assert false
   in

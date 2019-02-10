@@ -170,7 +170,7 @@ end = struct
         fixed_in_version;
         notes;
         status;
-        closed_at;
+        history;
         resolution;
         related;
         tags;
@@ -189,10 +189,11 @@ end = struct
     let updated_at = timestamp last_updated in
     let created_at = timestamp date_submitted in
     let closed_at =
-      match closed_at, closed with
-      | None, true -> Some updated_at
-      | None, false -> None
-      | Some s, _ -> Some (timestamp s)
+      match history with
+      | None -> if closed then Some updated_at else None
+      | Some (closed_at, st) ->
+          assert (st = status);
+          if Mantis.Status.is_closed status then Some (timestamp closed_at) else None
     in
     let assignee =
       match assignee with
