@@ -235,7 +235,7 @@ let github_t =
   in
   let token =
     let doc = "Github token." in
-    Arg.(value & opt (some string) None & info ["token"] ~docs ~doc)
+    Arg.(value & opt (some string) None & info ["token"] ~docs ~doc ~docv:"TOKEN")
   in
   let github token (owner, repo) = (token, owner, repo) in
   Term.(const github $ token $ repo)
