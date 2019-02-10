@@ -228,20 +228,17 @@ let extract_cmd =
 
 let github_t =
   let docs = Manpage.s_options in
-  let owner =
-    let doc = "Github owner." in
-    Arg.(required & opt (some string) None & info ["owner"] ~docs ~doc)
-  in
   let repo =
-    let doc = "Github repo." in
-    Arg.(required & opt (some string) None & info ["repo"] ~docs ~doc)
+    let doc = "Github repository." in
+    Arg.(required & pos 0 (some (pair ~sep:'/' string string)) None &
+         info [] ~docs ~doc ~docv:"OWNER/REPO")
   in
   let token =
     let doc = "Github token." in
     Arg.(value & opt (some string) None & info ["token"] ~docs ~doc)
   in
-  let github owner repo token = (token, owner, repo) in
-  Term.(const github $ owner $ repo $ token)
+  let github token (owner, repo) = (token, owner, repo) in
+  Term.(const github $ token $ repo)
 
 let milestones_cmd =
   let doc = "List Github milestones." in
