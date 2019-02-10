@@ -282,7 +282,16 @@ module Gist = struct
     let data = to_json gist in
     match Api.post ?verbose ~data ?token "/gists" with
     | Some json ->
-        Some (J.member "html_url" json |> J.to_string)
+        let html_url = J.member "html_url" json |> J.to_string in
+        let files_urls =
+          J.member "files" json |> J.to_assoc |>
+          List.map (fun (_, json) ->
+              let filename = json |> J.member "filename" |> J.to_string in
+              let url = json |> J.member "raw_url" |> J.to_string in
+              filename, url
+            )
+        in
+        Some (html_url, files_urls)
     | None ->
         None
 end

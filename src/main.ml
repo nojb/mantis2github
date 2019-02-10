@@ -175,9 +175,18 @@ let import verbose dry_run (token, owner, repo) db assignee next =
     Hashtbl.find h
   in
   let f (total_retries, total_time, count) (issue, gh_id) =
-    let gh_issue = Migrate.Issue.migrate ~gh_user ~gh_ids issue in
+    let gh_issue, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
     let starttime = Unix.gettimeofday () in
-    match Github.Issue.import ~verbose ?token ~owner ~repo gh_issue with
+    let gist_urls =
+      match gh_gist with
+      | None -> "", []
+      | Some gist ->
+          begin match Github.Gist.create ~verbose ?token gist with
+          | None -> failwith "Gist upload failed! Abort."
+          | Some urls -> urls
+          end
+    in
+    match Github.Issue.import ~verbose ?token ~owner ~repo (gh_issue gist_urls) with
     | Error _ ->
         failwith "Import failed! Abort"
     | Ok (gh_id', retries) ->

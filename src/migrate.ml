@@ -129,22 +129,31 @@ module Issue = struct
         "See also", see_also;
       ]
 
-  let extra_notes ~created_at ~description ~steps_to_reproduce ~additional_information =
+  let extra_notes
+      ~created_at
+      ~description
+      ~steps_to_reproduce
+      ~additional_information (_gist_url, file_urls)
+    =
     let note title contents l =
-      let title =
-        match title with
-        | None -> ""
-        | Some s -> Printf.sprintf "### *%s*\n\n" s
-      in
+      let title = Printf.sprintf "### *%s*\n\n" title in
       match String.trim contents with
       | "" -> l
       | body ->
           let body = title ^ body in
           {Github.Issue.Comment.created_at = Some created_at; body} :: l
     in
-    note None description
-      (note (Some "Steps to reproduce") steps_to_reproduce
-         (note (Some "Additional information") additional_information []))
+    let file_attachments =
+      match file_urls with
+      | [] -> ""
+      | _ :: _ ->
+          List.map (fun (filename, url) -> Printf.sprintf "- [%s](%s)\n" filename url) file_urls
+          |> String.concat ""
+    in
+    note "Bug description" description
+      (note "Steps to reproduce" steps_to_reproduce
+         (note "Additional information" additional_information
+            (note "File attachments" file_attachments [])))
 
   let labels ~priority ~severity ~category:_ ~status:_ ~resolution =
     Label.L.(of_priority priority @ of_severity severity @ of_resolution resolution)
@@ -154,7 +163,7 @@ module Issue = struct
   let milestone ~target_version:_ =
     None
 
-  let migrate ~gh_user ~gh_ids
+  let migrate ~owner ~repo ~gh_user ~gh_ids
       {
         Mantis.Issue.id;
         summary;
@@ -177,6 +186,7 @@ module Issue = struct
         resolution;
         related;
         tags;
+        files;
       }
     =
     let title = if summary = "" then "*no title*" else summary in
@@ -206,7 +216,13 @@ module Issue = struct
       | None ->
           None
     in
-    let extra_notes = extra_notes ~created_at ~description ~steps_to_reproduce ~additional_information in
+    let extra_notes urls =
+      extra_notes
+        ~created_at
+        ~description
+        ~steps_to_reproduce
+        ~additional_information urls
+    in
     let issue =
       {Github.Issue.Issue.title; body;
        created_at = Some created_at;
@@ -214,5 +230,17 @@ module Issue = struct
        assignee; milestone; closed_at;
        closed = Some closed; labels}
     in
-    {Github.Issue.issue; comments = extra_notes @ List.map Note.migrate notes}
+    let comments urls = extra_notes urls @ List.map Note.migrate notes in
+    let issue urls = {Github.Issue.issue; comments = comments urls} in
+    let gist =
+      match files with
+      | [] -> None
+      | _ :: _ ->
+          let description =
+            Printf.sprintf "https://github.com/%s/%s/issues/%d"
+              owner repo (gh_ids id)
+          in
+          Some {Github.Gist.files; description; public = true}
+    in
+    issue, gist
 end

@@ -114,6 +114,7 @@ module Issue : sig
       resolution: Resolution.t;
       related: int list;
       tags: string list;
+      files: (string * string) list;
     }
 
   val to_json: t -> Yojson.Basic.t

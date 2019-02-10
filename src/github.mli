@@ -90,5 +90,5 @@ module Gist : sig
     }
 
   val to_json: t -> Yojson.Basic.t
-  val create: ?verbose:bool -> ?token:string -> t -> string option
+  val create: ?verbose:bool -> ?token:string -> t -> (string * (string * string) list) option
 end
