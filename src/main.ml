@@ -277,7 +277,24 @@ let default_cmd =
   Term.(ret (const (`Help (`Pager, None)))),
   Term.info "mantis2github" ~version:"v0.1" ~doc ~sdocs ~exits
 
-let cmds = [extract_cmd; milestones_cmd; import_cmd; assignment_cmd]
+let get_labels verbose (token, owner, repo) =
+  match Github.Label.list ~verbose ?token ~owner ~repo () with
+  | None -> failwith "Could not retrieve labels"
+  | Some l -> List.iter print_endline l
+
+let labels_cmd =
+  let doc = "List github labels." in
+  Term.(const get_labels $ verbose_t $ github_t),
+  Term.info "labels" ~doc
+
+let cmds =
+  [
+    extract_cmd;
+    milestones_cmd;
+    import_cmd;
+    assignment_cmd;
+    labels_cmd;
+  ]
 
 let () =
   Term.(exit (eval_choice default_cmd cmds))

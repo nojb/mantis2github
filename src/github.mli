@@ -33,6 +33,10 @@ module Api : sig
     ?token:string -> ('a, unit, string, Yojson.Basic.t option) format4 -> 'a
 end
 
+module Label : sig
+  val list: ?verbose:bool -> ?token:string -> owner:string -> repo:string -> unit -> string list option
+end
+
 module Milestone : sig
   val list: ?verbose:bool -> ?token:string -> owner:string -> repo:string -> unit -> (string * int) list option
 end
