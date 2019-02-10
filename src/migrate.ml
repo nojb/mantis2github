@@ -116,7 +116,7 @@ module Issue = struct
     let see_also =
       related
       |> List.map (fun (_, gh_id) -> Printf.sprintf "#%d" gh_id)
-      |> String.concat ", "
+      |> String.concat " "
     in
     combine
       [
