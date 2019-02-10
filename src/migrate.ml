@@ -136,7 +136,7 @@ module Issue = struct
       ~additional_information (_gist_url, file_urls)
     =
     let note title contents l =
-      let title = Printf.sprintf "### *%s*\n\n" title in
+      let title = Printf.sprintf "*%s*\n\n" title in
       match String.trim contents with
       | "" -> l
       | body ->
