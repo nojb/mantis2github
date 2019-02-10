@@ -218,7 +218,7 @@ let verbose_t =
 
 let bug_ids_t =
   let doc = "Mantis bug numbers." in
-  Arg.(value & pos_all int [] & info [] ~doc)
+  Arg.(value & pos_right 0 int [] & info [] ~doc)
 
 let extract_cmd =
   let doc = "Extract Mantis into JSON" in
