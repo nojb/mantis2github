@@ -278,20 +278,55 @@ module Gist = struct
              "description", `String description;
              "public", `Bool public ]
 
+  let exec ~verbose cmd =
+    if verbose then Printf.eprintf "+ %s\n%!" cmd;
+    assert (0 = Sys.command cmd)
+
+  let clone ?(verbose = false) ?(token = "") id files =
+    let exec = exec ~verbose in
+    let dir = Filename.get_temp_dir_name () in
+    Printf.ksprintf exec "git -C %s clone https://%s@gist.github.com/%s.git" dir token id;
+    let dir = Filename.concat dir id in
+    Printf.ksprintf exec "git -C %s rm '*'" dir;
+    List.iter (fun (name, content) ->
+        let oc = open_out_bin (Filename.concat dir name) in
+        output_string oc content;
+        close_out oc;
+        Printf.ksprintf exec "git -C %s add %s" dir name
+      ) files;
+    Printf.ksprintf exec "git -C %s commit --amend --allow-empty-message --no-edit" dir;
+    Printf.ksprintf exec "git -C %s push -f" dir
+
+  let dummy description =
+    {
+      files = ["hello", "world"];
+      description;
+      public = true;
+    }
+
   let create ?verbose ?token gist =
-    let data = to_json gist in
+    let data = dummy gist.description |> to_json in
     match Api.post ?verbose ~data ?token "/gists" with
     | Some json ->
         let html_url = J.member "html_url" json |> J.to_string in
-        let files_urls =
-          J.member "files" json |> J.to_assoc |>
-          List.map (fun (_, json) ->
-              let filename = json |> J.member "filename" |> J.to_string in
-              let url = json |> J.member "raw_url" |> J.to_string in
-              filename, url
-            )
-        in
-        Some (html_url, files_urls)
+        let git_pull_url = J.member "git_pull_url" json |> J.to_string in
+        let id = Scanf.sscanf git_pull_url "https://gist.github.com/%s@.git" (fun s -> s) in
+        clone ?verbose ?token id gist.files;
+        begin match Api.get ?verbose ?token "/gists/%s" id with
+        | None -> None
+        | Some json ->
+            let files_urls =
+              J.member "files" json |> J.to_assoc |>
+              List.map (fun (_, json) ->
+                  let filename = json |> J.member "filename" |> J.to_string in
+                  let url = json |> J.member "raw_url" |> J.to_string in
+                  filename, url
+                )
+            in
+            assert (List.sort Stdlib.compare (List.map fst files_urls) =
+                    List.sort Stdlib.compare (List.map fst gist.files));
+            Some (html_url, files_urls)
+        end
     | None ->
         None
 end

@@ -90,5 +90,6 @@ module Gist : sig
     }
 
   val to_json: t -> Yojson.Basic.t
+  val clone: ?verbose:bool -> ?token:string -> string -> (string * string) list -> unit
   val create: ?verbose:bool -> ?token:string -> t -> (string * (string * string) list) option
 end
