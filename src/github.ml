@@ -265,6 +265,7 @@ module Gist = struct
   let clone ?(verbose = false) ?(token = "") id files =
     let exec = exec ~verbose in
     let dir = Filename.get_temp_dir_name () in
+    Printf.ksprintf exec "rm -rf %s" (Filename.concat dir id);
     Printf.ksprintf exec "git -C %s clone https://%s@gist.github.com/%s.git" dir token id;
     let dir = Filename.concat dir id in
     Printf.ksprintf exec "git -C %s rm '*'" dir;

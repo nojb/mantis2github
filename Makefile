@@ -2,7 +2,7 @@ OWNER=mantismigrationtest-123
 REPO=ocaml-mantis-wip
 PROG=_build/install/default/bin/mantis2github
 
-FLAGS=$(OWNER)/$(REPO) --token $(TOKEN) --assignee $(OWNER)
+FLAGS=$(OWNER)/$(REPO) --token $(TOKEN) --assignee $(OWNER) -o assign.txt
 
 ifdef VERBOSE
 FLAGS += --verbose

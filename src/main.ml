@@ -55,6 +55,18 @@ let with_out s f =
       Printf.eprintf "[ERR] Could not write %s.\n%!" s;
       raise exn
 
+let with_in s f =
+  let ic = open_in_bin s in
+  match f ic with
+  | r ->
+      close_in ic;
+      Printf.eprintf "[OK] Read from %s.\n%!" s;
+      r
+  | exception exn ->
+      close_in ic;
+      Printf.eprintf "[ERR] Could not read %s.\n%!" s;
+      raise exn
+
 let gh_user = function
   | "administrator" -> "bactrian"
   | "xleroy" -> "xavierleroy"
@@ -144,7 +156,7 @@ type safepoint =
   | Gist_created of (string * (string * string) list)
   | Waiting_for_import of (string * (string * string) list) * Github.Issue.waiting
 
-type repo =
+type gh =
   {
     token: string;
     owner: string;
@@ -160,6 +172,9 @@ type state =
 let save_state gh st =
   with_out "resume_info.dat" (fun oc -> Marshal.to_channel oc (gh, st) [])
 
+let read_state () : (gh * state) =
+  with_in "resume_info.dat" (fun ic -> Marshal.from_channel ic)
+
 let import verbose ({token; owner; repo} as gh) db gh_user txt state =
   let next =
     match Github.Issue.count ~verbose ~token ~owner ~repo () with
@@ -174,10 +189,9 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
     |> compute_assignment next
   in
   begin match txt with
+  | None -> ()
   | Some txt ->
       with_out txt (fun oc -> output_assignment oc a)
-  | None ->
-      output_assignment stdout a
   end;
   let gh_ids =
     let h = Hashtbl.create (List.length a) in
@@ -185,6 +199,7 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
     Hashtbl.find h
   in
   let rec f a ({finished; pt} as state) =
+    save_state gh state;
     match a, pt with
     | [], Start_import -> Ok ()
     | (id, _) :: _, Start_import ->
@@ -231,6 +246,10 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
       save_state gh state
   | Ok () ->
       ()
+
+let resume verbose db gh_user =
+  let gh, state = read_state () in
+  import verbose gh db gh_user None state
 
 open Cmdliner
 
@@ -282,6 +301,11 @@ let import_cmd =
   Term.(const import $ verbose_t $ github_t $ const db $ assignee_t $ o_t $ const {finished = 0; pt = Start_import}),
   Term.info "import" ~doc
 
+let resume_cmd =
+  let doc = "Resume issues." in
+  Term.(const resume $ verbose_t $ const db $ assignee_t),
+  Term.info "resume" ~doc
+
 let default_cmd =
   let doc = "a Mantis => Github migration tool" in
   let sdocs = Manpage.s_common_options in
@@ -293,6 +317,7 @@ let cmds =
   [
     extract_cmd;
     import_cmd;
+    resume_cmd;
   ]
 
 let () =
