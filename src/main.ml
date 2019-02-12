@@ -104,27 +104,27 @@ let assignment issues next =
   let module S = Set.Make (struct type t = int let compare = Stdlib.compare end) in
   let rec go assigned unassigned next = function
     | id :: ids as ids' ->
-      if id < next then
-        go assigned (S.add id unassigned) next ids
-      else if id = next then
-        go ((id, next) :: assigned) unassigned (succ next) ids
-      else (* id > next *)
-        begin match S.min_elt_opt unassigned with
-        | None ->
-            Printf.eprintf
-              "[WARNING] gap cannot be filled by unassigned issues (id=%d,next=%d)\n%!"
-              id next;
-            go ((id, next) :: assigned) unassigned (succ next) ids
-        | Some id ->
-            go ((id, next) :: assigned) (S.remove id unassigned) (succ next) ids'
-        end
+        if id < next then
+          go assigned (S.add id unassigned) next ids
+        else if id = next then
+          go ((id, next) :: assigned) unassigned (succ next) ids
+        else (* id > next *)
+          begin match S.min_elt_opt unassigned with
+          | None ->
+              Printf.eprintf
+                "[WARNING] gap cannot be filled by unassigned issues (id=%d,next=%d)\n%!"
+                id next;
+              go ((id, next) :: assigned) unassigned (succ next) ids
+          | Some id ->
+              go ((id, next) :: assigned) (S.remove id unassigned) (succ next) ids'
+          end
     | [] ->
-      let rec loop unassigned assigned next =
-        match S.min_elt_opt unassigned with
-        | None -> assigned
-        | Some id -> loop (S.remove id unassigned) ((id, next) :: assigned) (succ next)
-      in
-      loop unassigned assigned next
+        let rec loop unassigned assigned next =
+          match S.min_elt_opt unassigned with
+          | None -> assigned
+          | Some id -> loop (S.remove id unassigned) ((id, next) :: assigned) (succ next)
+        in
+        loop unassigned assigned next
   in
   Hashtbl.fold (fun id _ acc -> id :: acc) issues []
   |> List.sort Stdlib.compare
@@ -159,16 +159,16 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
   let next =
     match Github.Issue.count ~verbose ~token ~owner ~repo () with
     | None ->
-      failwith "Could not count issues, cannot proceed!"
+        failwith "Could not count issues, cannot proceed!"
     | Some n ->
-      succ n
+        succ n
   in
   let issues = Mantis.Db.use db Mantis.fetch in
   let a = assignment issues next in
   begin match txt with
-    | Some txt ->
+  | Some txt ->
       with_out txt (fun oc -> output_assignment oc a)
-    | None ->
+  | None ->
       output_assignment stdout a
   end;
   let gh_ids =
@@ -180,49 +180,49 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
     match a, pt with
     | [], Start_import -> Ok ()
     | (id, _) :: _, Start_import ->
-      let issue = Hashtbl.find issues id in
-      let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
-      begin match gh_gist with
+        let issue = Hashtbl.find issues id in
+        let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
+        begin match gh_gist with
         | None ->
-          f a {finished; pt = Gist_created ("", [])}
+            f a {finished; pt = Gist_created ("", [])}
         | Some gist ->
-          begin match Github.Gist.create ~verbose ~token gist with
+            begin match Github.Gist.create ~verbose ~token gist with
             | None ->
-              Error state
+                Error state
             | Some gist_urls ->
-              f a {finished; pt = Gist_created gist_urls}
-          end
-      end
+                f a {finished; pt = Gist_created gist_urls}
+            end
+        end
     | [], (Gist_created _ | Waiting_for_import _) ->
-      assert false
+        assert false
     | (id, _) :: _, Gist_created gist_urls ->
-      let issue = Hashtbl.find issues id in
-      let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
-      begin match Github.Issue.import ~verbose ~token ~owner ~repo (gh_issue gist_urls) with
+        let issue = Hashtbl.find issues id in
+        let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
+        begin match Github.Issue.import ~verbose ~token ~owner ~repo (gh_issue gist_urls) with
         | None ->
-          Error state
+            Error state
         | Some w ->
-          f a {finished; pt = Waiting_for_import (gist_urls, w)}
-      end
+            f a {finished; pt = Waiting_for_import (gist_urls, w)}
+        end
     | (id, gh_id) :: pending, Waiting_for_import (gist_urls, w) ->
-      begin match Github.Issue.check_imported ~verbose ~token ~owner ~repo w with
+        begin match Github.Issue.check_imported ~verbose ~token ~owner ~repo w with
         | Waiting w ->
-          f a {finished; pt = Waiting_for_import (gist_urls, w)}
+            f a {finished; pt = Waiting_for_import (gist_urls, w)}
         | Failed ->
-          Error {finished; pt = Gist_created gist_urls}
+            Error {finished; pt = Gist_created gist_urls}
         | Success gh_id' ->
-          if gh_id <> gh_id' then
-            Printf.ksprintf failwith
-              "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)" id gh_id gh_id';
-          Printf.printf "%4d => %4d\n%!" id gh_id;
-          f pending {finished = succ finished; pt = Start_import}
-      end
+            if gh_id <> gh_id' then
+              Printf.ksprintf failwith
+                "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)" id gh_id gh_id';
+            Printf.printf "%4d => %4d\n%!" id gh_id;
+            f pending {finished = succ finished; pt = Start_import}
+        end
   in
   match f (List.drop state.finished a) state with
   | Error state ->
-    save_state gh state
+      save_state gh state
   | Ok () ->
-    ()
+      ()
 
 open Cmdliner
 

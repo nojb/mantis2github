@@ -75,23 +75,23 @@ module Api = struct
     let tmp_http_code = Filename.temp_file "curl" "code" in
     match Sys.command (Printf.sprintf "%s -o %s > %s" cmd tmp tmp_http_code) with
     | 0 ->
-      let ic = open_in tmp_http_code in
-      let code = input_line ic |> int_of_string in
-      close_in ic;
-      let ic = open_in_bin tmp in
-      let s = really_input_string ic (in_channel_length ic) in
-      close_in ic;
-      let json = Yojson.Basic.from_string s in
-      if code >= 400 then begin
-        let json = ["cmd", `String cmd; "res", json] in
-        let json = match data with None -> json | Some data -> ("data", data) :: json in
-        let json = `Assoc json in
-        Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-        None
-      end else
-        Some json
+        let ic = open_in tmp_http_code in
+        let code = input_line ic |> int_of_string in
+        close_in ic;
+        let ic = open_in_bin tmp in
+        let s = really_input_string ic (in_channel_length ic) in
+        close_in ic;
+        let json = Yojson.Basic.from_string s in
+        if code >= 400 then begin
+          let json = ["cmd", `String cmd; "res", json] in
+          let json = match data with None -> json | Some data -> ("data", data) :: json in
+          let json = `Assoc json in
+          Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+          None
+        end else
+          Some json
     | _ ->
-      None
+        None
 
   let get ?verbose ?headers ?params ?token fmt =
     Printf.ksprintf (curl GET ?verbose ?headers ?params ?token) fmt
@@ -180,36 +180,36 @@ module Issue = struct
     match Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id with
     | None -> Failed
     | Some json ->
-      begin match json |> J.member "status" |> J.to_string with
+        begin match json |> J.member "status" |> J.to_string with
         | "imported" ->
-          let id =
-            json
-            |> J.member "issue_url"
-            |> J.to_string
-            |> String.split_on_char '/'
-            |> List.rev
-            |> List.hd
-            |> int_of_string
-          in
-          Success id
+            let id =
+              json
+              |> J.member "issue_url"
+              |> J.to_string
+              |> String.split_on_char '/'
+              |> List.rev
+              |> List.hd
+              |> int_of_string
+            in
+            Success id
         | "failed" ->
-          let json = `Assoc ["issue", data; "error", json] in
-          Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-          Failed
+            let json = `Assoc ["issue", data; "error", json] in
+            Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+            Failed
         | "pending" ->
-          Waiting (id, data, 2 * sleep)
+            Waiting (id, data, 2 * sleep)
         | _ ->
-          Failed
-      end
+            Failed
+        end
 
   let import ?verbose ?token ~owner ~repo issue =
     let data = to_json issue in
     match Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo with
     | None ->
-      None
+        None
     | Some json ->
-      let id = json |> J.member "id" |> J.to_int in
-      Some (id, data, 1)
+        let id = json |> J.member "id" |> J.to_int in
+        Some (id, data, 1)
 
   let count ?verbose ?token ~owner ~repo () =
     let query =
