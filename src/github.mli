@@ -47,8 +47,6 @@ module Issue : sig
         closed: bool option;
         labels: string list;
       }
-
-    val to_json: t -> Yojson.Basic.t
   end
 
   module Comment : sig
@@ -57,8 +55,6 @@ module Issue : sig
         created_at: string option;
         body: string;
       }
-
-    val to_json: t -> Yojson.Basic.t
   end
 
   type t =
@@ -67,9 +63,16 @@ module Issue : sig
       comments: Comment.t list;
     }
 
-  val to_json: t -> Yojson.Basic.t
+  type waiting = int * Yojson.Basic.t * int
 
-  val import: ?verbose:bool -> ?token:string -> owner:string -> repo:string -> t -> int option
+  type token =
+    | Failed
+    | Success of int
+    | Waiting of waiting
+
+  val import: ?verbose:bool -> ?token:string -> owner:string -> repo:string -> t -> waiting option
+  val check_imported: ?verbose:bool -> ?token:string -> owner:string ->repo:string -> waiting -> token
+
   val count: ?verbose:bool -> ?token:string -> owner:string -> repo:string -> unit -> int option
 end
 
@@ -81,7 +84,5 @@ module Gist : sig
       public: bool;
     }
 
-  val to_json: t -> Yojson.Basic.t
-  val clone: ?verbose:bool -> ?token:string -> string -> (string * string) list -> unit
   val create: ?verbose:bool -> ?token:string -> t -> (string * (string * string) list) option
 end

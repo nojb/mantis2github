@@ -73,22 +73,25 @@ module Api = struct
     if verbose then Printf.eprintf "+ %s\n%!" cmd;
     let tmp = Filename.temp_file "curl" "out" in
     let tmp_http_code = Filename.temp_file "curl" "code" in
-    assert (Sys.command (Printf.sprintf "%s -o %s > %s" cmd tmp tmp_http_code) = 0);
-    let ic = open_in tmp_http_code in
-    let code = input_line ic |> int_of_string in
-    close_in ic;
-    let ic = open_in_bin tmp in
-    let s = really_input_string ic (in_channel_length ic) in
-    close_in ic;
-    let json = Yojson.Basic.from_string s in
-    if code >= 400 then begin
-      let json = ["cmd", `String cmd; "res", json] in
-      let json = match data with None -> json | Some data -> ("data", data) :: json in
-      let json = `Assoc json in
-      Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+    match Sys.command (Printf.sprintf "%s -o %s > %s" cmd tmp tmp_http_code) with
+    | 0 ->
+      let ic = open_in tmp_http_code in
+      let code = input_line ic |> int_of_string in
+      close_in ic;
+      let ic = open_in_bin tmp in
+      let s = really_input_string ic (in_channel_length ic) in
+      close_in ic;
+      let json = Yojson.Basic.from_string s in
+      if code >= 400 then begin
+        let json = ["cmd", `String cmd; "res", json] in
+        let json = match data with None -> json | Some data -> ("data", data) :: json in
+        let json = `Assoc json in
+        Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+        None
+      end else
+        Some json
+    | _ ->
       None
-    end else
-      Some json
 
   let get ?verbose ?headers ?params ?token fmt =
     Printf.ksprintf (curl GET ?verbose ?headers ?params ?token) fmt
@@ -162,50 +165,51 @@ module Issue = struct
       comments: Comment.t list;
     }
 
+  type waiting = int * Yojson.Basic.t * int
+
+  type token =
+    | Failed
+    | Success of int
+    | Waiting of waiting
+
   let to_json {issue; comments} =
     `Assoc ["issue", Issue.to_json issue; "comments", `List (List.map Comment.to_json comments)]
 
-  let is_imported ?verbose ?token ~owner ~repo id =
+  let check_imported ?verbose ?token ~owner ~repo (id, data, sleep) =
+    Unix.sleep sleep;
     match Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id with
-    | None -> None
+    | None -> Failed
     | Some json ->
-        begin match json |> J.member "status" |> J.to_string with
+      begin match json |> J.member "status" |> J.to_string with
         | "imported" ->
-            let id =
-              json
-              |> J.member "issue_url"
-              |> J.to_string
-              |> String.split_on_char '/'
-              |> List.rev
-              |> List.hd
-              |> int_of_string
-            in
-            Some (Ok id)
+          let id =
+            json
+            |> J.member "issue_url"
+            |> J.to_string
+            |> String.split_on_char '/'
+            |> List.rev
+            |> List.hd
+            |> int_of_string
+          in
+          Success id
         | "failed" ->
-            Some (Error json)
+          let json = `Assoc ["issue", data; "error", json] in
+          Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
+          Failed
+        | "pending" ->
+          Waiting (id, data, 2 * sleep)
         | _ ->
-            None
-        end
+          Failed
+      end
 
   let import ?verbose ?token ~owner ~repo issue =
     let data = to_json issue in
     match Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo with
     | None ->
-        None
+      None
     | Some json ->
-        let id = json |> J.member "id" |> J.to_int in
-        let rec loop n retries =
-          Unix.sleep n;
-          match is_imported ?verbose ?token ~repo ~owner id with
-          | Some (Ok id) -> Some id
-          | Some (Error err) ->
-              let json = `Assoc ["issue", data; "error", err] in
-              Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-              None
-          | None ->
-              loop (2 * n) (succ retries)
-        in
-        loop 1 0
+      let id = json |> J.member "id" |> J.to_int in
+      Some (id, data, 1)
 
   let count ?verbose ?token ~owner ~repo () =
     let query =

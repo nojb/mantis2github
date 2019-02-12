@@ -32,6 +32,11 @@
 module List = struct
   include List
 
+  let rec drop n = function
+    | [] -> []
+    | _ :: l when n > 0 -> drop (pred n) l
+    | _ as l -> l
+
   let rec truncate n = function
     | [] -> []
     | x :: l when n > 0 -> x :: truncate (pred n) l
@@ -84,26 +89,16 @@ let gh_user = function
   (* | "guesdon" -> "zoggy" *)
   | _ -> raise Not_found
 
-let extract db ids =
-  let f db =
-    let issues = Mantis.fetch db in
-    if ids = [] then
-      let f _ issue =
-        let json = Mantis.Issue.to_json issue in
-        Printf.printf "%a\n" (Yojson.Basic.pretty_to_channel ~std:true) json
-      in
-      Hashtbl.iter f issues
-    else
-      List.iter (fun id ->
-          match Hashtbl.find_opt issues id with
-          | None ->
-              Printf.eprintf "No Mantis issue found with id %d\n%!" id
-          | Some issue ->
-              let json = Mantis.Issue.to_json issue in
-              Printf.printf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json
-        ) ids
+let gh_user s =
+  try Some (gh_user s) with Not_found -> None
+
+let extract db =
+  let issues = Mantis.Db.use db Mantis.fetch in
+  let f _ issue =
+    let json = Mantis.Issue.to_json issue in
+    Printf.printf "%a\n" (Yojson.Basic.pretty_to_channel ~std:true) json
   in
-  Mantis.Db.use db f
+  Hashtbl.iter f issues
 
 let assignment issues next =
   let module S = Set.Make (struct type t = int let compare = Stdlib.compare end) in
@@ -139,73 +134,88 @@ let assignment issues next =
 let output_assignment oc a =
   List.iter (fun (id, gh_id) -> Printf.fprintf oc "%4d %4d\n" id gh_id) a
 
-let import verbose (token, owner, repo) db assignee txt bug_ids =
+type safepoint =
+  | Start_import
+  | Gist_created of (string * (string * string) list)
+  | Waiting_for_import of (string * (string * string) list) * Github.Issue.waiting
+
+type state =
+  {
+    finished: int;
+    pt: safepoint;
+  }
+
+let save_state st =
+  with_out "resume_info.dat" (fun oc -> Marshal.to_channel oc st [])
+
+let import verbose (token, owner, repo) db gh_user txt state =
   let next =
     match Github.Issue.count ~verbose ?token ~owner ~repo () with
     | None ->
-        failwith "Could not count issues!"
+      failwith "Could not count issues, cannot proceed!"
     | Some n ->
-        succ n
+      succ n
   in
-  let issues =
-    let issues = Mantis.Db.use db Mantis.fetch in
-    if bug_ids = [] then issues
-    else begin
-      let h = Hashtbl.create (List.length bug_ids) in
-      List.iter (fun id ->
-          match Hashtbl.find_opt issues id with
-          | None -> Printf.eprintf "WARNING: no bug with id=%d\n%!" id
-          | Some issue -> Hashtbl.replace h id issue
-        ) bug_ids;
-      h
-    end
-  in
+  let issues = Mantis.Db.use db Mantis.fetch in
   let a = assignment issues next in
   begin match txt with
-  | Some txt ->
-    with_out txt (fun oc -> output_assignment oc a)
-  | None ->
-    output_assignment stdout a
+    | Some txt ->
+      with_out txt (fun oc -> output_assignment oc a)
+    | None ->
+      output_assignment stdout a
   end;
-  let gh_user =
-    match assignee with
-    | None -> begin fun s -> try Some (gh_user s) with Not_found -> None end
-    | Some _ as x -> begin fun _ -> x end
-  in
   let gh_ids =
     let h = Hashtbl.create (List.length a) in
     List.iter (fun (id, gh_id) -> Hashtbl.add h id gh_id) a;
     Hashtbl.find h
   in
-  let f (total_time, count) (id, gh_id) =
-    let issue = Hashtbl.find issues id in
-    let gh_issue, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
-    let starttime = Unix.gettimeofday () in
-    let gist_urls =
-      match gh_gist with
-      | None -> "", []
-      | Some gist ->
+  let rec f a ({finished; pt} as state) =
+    match a, pt with
+    | [], Start_import -> Ok ()
+    | (id, _) :: _, Start_import ->
+      let issue = Hashtbl.find issues id in
+      let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
+      begin match gh_gist with
+        | None ->
+          f a {finished; pt = Gist_created ("", [])}
+        | Some gist ->
           begin match Github.Gist.create ~verbose ?token gist with
-          | None -> failwith "Gist upload failed! Abort."
-          | Some urls -> urls
+            | None ->
+              Error state
+            | Some gist_urls ->
+              f a {finished; pt = Gist_created gist_urls}
           end
-    in
-    match Github.Issue.import ~verbose ?token ~owner ~repo (gh_issue gist_urls) with
-    | None ->
-        failwith "Import failed! Abort"
-    | Some gh_id' ->
-        if gh_id <> gh_id' then
-          Printf.ksprintf failwith "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)"
-            issue.Mantis.Issue.id gh_id gh_id';
-        let endtime = Unix.gettimeofday () in
-        let dt = endtime -. starttime in
-        let total_time = total_time +. dt in
-        Printf.printf "%4d %4d %6.1f %6.1f %dh%02d\n%!"
-          issue.Mantis.Issue.id gh_id dt (total_time /. float count)
-          (truncate (total_time /. 3600.)) (truncate (total_time /. 60.));
-        (total_time, succ count)
+      end
+    | [], (Gist_created _ | Waiting_for_import _) ->
+      assert false
+    | (id, _) :: _, Gist_created gist_urls ->
+      let issue = Hashtbl.find issues id in
+      let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
+      begin match Github.Issue.import ~verbose ?token ~owner ~repo (gh_issue gist_urls) with
+        | None ->
+          Error state
+        | Some w ->
+          f a {finished; pt = Waiting_for_import (gist_urls, w)}
+      end
+    | (id, gh_id) :: pending, Waiting_for_import (gist_urls, w) ->
+      begin match Github.Issue.check_imported ~verbose ?token ~owner ~repo w with
+        | Waiting w ->
+          f a {finished; pt = Waiting_for_import (gist_urls, w)}
+        | Failed ->
+          Error {finished; pt = Gist_created gist_urls}
+        | Success gh_id' ->
+          if gh_id <> gh_id' then
+            Printf.ksprintf failwith
+              "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)" id gh_id gh_id';
+          Printf.printf "%4d => %4d\n%!" id gh_id;
+          f pending {finished = succ finished; pt = Start_import}
+      end
   in
-  List.fold_left f (0., 0) a |> ignore
+  match f (List.drop state.finished a) state with
+  | Error state ->
+    save_state state
+  | Ok () ->
+    ()
 
 open Cmdliner
 
@@ -223,14 +233,10 @@ let verbose_t =
   let doc = "Be verbose." in
   Arg.(value & flag & info ["verbose"; "v"] ~doc)
 
-let bug_ids_t =
-  let doc = "Mantis bug numbers." in
-  Arg.(value & pos_right 0 int [] & info [] ~doc)
-
 let extract_cmd =
   let doc = "Extract Mantis into JSON" in
   let exits = Term.default_exits in
-  Term.(const extract $ const db $ bug_ids_t),
+  Term.(const extract $ const db),
   Term.info "extract" ~doc ~sdocs:Manpage.s_common_options ~exits
 
 let github_t =
@@ -249,7 +255,8 @@ let github_t =
 
 let assignee_t =
   let doc = "Override assignee." in
-  Arg.(value & opt (some string) None & info ["assignee"] ~doc)
+  let f = function None -> gh_user | Some _ as x -> fun _ -> x in
+  Term.(const f $ Arg.(value & opt (some string) None & info ["assignee"] ~doc))
 
 let o_t =
   let doc = "Output assignment." in
@@ -257,7 +264,7 @@ let o_t =
 
 let import_cmd =
   let doc = "Import issues." in
-  Term.(const import $ verbose_t $ github_t $ const db $ assignee_t $ o_t $ bug_ids_t),
+  Term.(const import $ verbose_t $ github_t $ const db $ assignee_t $ o_t $ const {finished = 0; pt = Start_import}),
   Term.info "import" ~doc
 
 let default_cmd =
