@@ -107,7 +107,7 @@ let extract db ids =
 
 module IntSet = Set.Make (struct type t = int let compare = Stdlib.compare end)
 
-let assignment db next bug_ids =
+let assignment issues next =
   let rec go assigned unassigned next = function
     | id :: ids as ids' ->
       if id < next then
@@ -132,6 +132,19 @@ let assignment db next bug_ids =
       in
       loop unassigned assigned next
   in
+  Hashtbl.fold (fun id _ acc -> id :: acc) issues []
+  |> List.sort Stdlib.compare
+  |> go [] IntSet.empty next
+  |> List.sort (fun (_, gh_id1) (_, gh_id2) -> Stdlib.compare gh_id1 gh_id2)
+
+let import verbose (token, owner, repo) db assignee bug_ids =
+  let next =
+    match Github.Issue.count ~verbose ?token ~owner ~repo () with
+    | None ->
+        failwith "Could not count issues!"
+    | Some n ->
+        succ n
+  in
   let issues =
     let issues = Mantis.Db.use db Mantis.fetch in
     if bug_ids = [] then issues
@@ -145,28 +158,12 @@ let assignment db next bug_ids =
       h
     end
   in
-  let a =
-    Hashtbl.fold (fun id _ acc -> id :: acc) issues []
-    |> List.sort Stdlib.compare
-    |> go [] IntSet.empty next
-    |> List.sort (fun (_, gh_id1) (_, gh_id2) -> Stdlib.compare gh_id1 gh_id2)
-  in
+  let a = assignment issues next in
   with_out "assign.txt" (fun oc ->
       List.iter (fun (id, gh_id) ->
           Printf.fprintf oc "%4d %4d\n" id gh_id
         ) a
     );
-  issues, a
-
-let import verbose (token, owner, repo) db assignee bug_ids =
-  let next =
-    match Github.Issue.count ~verbose ?token ~owner ~repo () with
-    | None ->
-        failwith "Could not count issues!"
-    | Some n ->
-        succ n
-  in
-  let issues, a = assignment db next bug_ids in
   let gh_user =
     match assignee with
     | None -> begin fun s -> try Some (gh_user s) with Not_found -> None end
