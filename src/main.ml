@@ -207,32 +207,15 @@ let import verbose (token, owner, repo) db assignee bug_ids =
 
 open Cmdliner
 
-let db_t =
-  let docs = Manpage.s_options in
-  let dbhost =
-    let doc = "Database hostname." in
-    Arg.(value & opt (some string) (Some "127.0.0.1") & info ["dbhost"] ~docs ~doc)
-  in
-  let dbname =
-    let doc = "Database name." in
-    Arg.(value & opt (some string) (Some "db") & info ["dbname"] ~docs ~doc)
-  in
-  let dbport =
-    let doc = "Database port." in
-    Arg.(value & opt (some int) None & info ["dbport"] ~docs ~doc)
-  in
-  let dbpwd =
-    let doc = "Database password." in
-    Arg.(value & opt (some string) None & info ["dbpassword"] ~docs ~doc)
-  in
-  let dbuser =
-    let doc = "Database username." in
-    Arg.(value & opt (some string) (Some "root") & info ["dbusername"] ~docs ~doc)
-  in
-  let db dbhost dbname dbport dbpwd dbuser =
-    {Mysql.dbhost; dbname; dbport; dbpwd; dbuser; dbsocket = None}
-  in
-  Term.(const db $ dbhost $ dbname $ dbport $ dbpwd $ dbuser)
+let db =
+  {
+    Mysql.dbuser = Some "root";
+    dbpwd = None;
+    dbhost = Some "127.0.0.1";
+    dbport = None;
+    dbsocket = None;
+    dbname = Some "db";
+  }
 
 let verbose_t =
   let doc = "Be verbose." in
@@ -245,7 +228,7 @@ let bug_ids_t =
 let extract_cmd =
   let doc = "Extract Mantis into JSON" in
   let exits = Term.default_exits in
-  Term.(const extract $ db_t $ bug_ids_t),
+  Term.(const extract $ const db $ bug_ids_t),
   Term.info "extract" ~doc ~sdocs:Manpage.s_common_options ~exits
 
 let github_t =
@@ -268,7 +251,7 @@ let assignee_t =
 
 let import_cmd =
   let doc = "Import issues." in
-  Term.(const import $ verbose_t $ github_t $ db_t $ assignee_t $ bug_ids_t),
+  Term.(const import $ verbose_t $ github_t $ const db $ assignee_t $ bug_ids_t),
   Term.info "import" ~doc
 
 let default_cmd =
