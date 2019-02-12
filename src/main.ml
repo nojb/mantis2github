@@ -105,36 +105,35 @@ let extract db ids =
   in
   Mantis.Db.use db f
 
-module IntSet = Set.Make (struct type t = int let compare = Stdlib.compare end)
-
 let assignment issues next =
+  let module S = Set.Make (struct type t = int let compare = Stdlib.compare end) in
   let rec go assigned unassigned next = function
     | id :: ids as ids' ->
       if id < next then
-        go assigned (IntSet.add id unassigned) next ids
+        go assigned (S.add id unassigned) next ids
       else if id = next then
         go ((id, next) :: assigned) unassigned (succ next) ids
       else (* id > next *)
-        begin match IntSet.min_elt_opt unassigned with
+        begin match S.min_elt_opt unassigned with
         | None ->
             Printf.eprintf
               "[WARNING] gap cannot be filled by unassigned issues (id=%d,next=%d)\n%!"
               id next;
             go ((id, next) :: assigned) unassigned (succ next) ids
         | Some id ->
-            go ((id, next) :: assigned) (IntSet.remove id unassigned) (succ next) ids'
+            go ((id, next) :: assigned) (S.remove id unassigned) (succ next) ids'
         end
     | [] ->
       let rec loop unassigned assigned next =
-        match IntSet.min_elt_opt unassigned with
+        match S.min_elt_opt unassigned with
         | None -> assigned
-        | Some id -> loop (IntSet.remove id unassigned) ((id, next) :: assigned) (succ next)
+        | Some id -> loop (S.remove id unassigned) ((id, next) :: assigned) (succ next)
       in
       loop unassigned assigned next
   in
   Hashtbl.fold (fun id _ acc -> id :: acc) issues []
   |> List.sort Stdlib.compare
-  |> go [] IntSet.empty next
+  |> go [] S.empty next
   |> List.sort (fun (_, gh_id1) (_, gh_id2) -> Stdlib.compare gh_id1 gh_id2)
 
 let import verbose (token, owner, repo) db assignee bug_ids =
