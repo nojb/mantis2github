@@ -139,18 +139,25 @@ type safepoint =
   | Gist_created of (string * (string * string) list)
   | Waiting_for_import of (string * (string * string) list) * Github.Issue.waiting
 
+type repo =
+  {
+    token: string;
+    owner: string;
+    repo: string;
+  }
+
 type state =
   {
     finished: int;
     pt: safepoint;
   }
 
-let save_state st =
-  with_out "resume_info.dat" (fun oc -> Marshal.to_channel oc st [])
+let save_state gh st =
+  with_out "resume_info.dat" (fun oc -> Marshal.to_channel oc (gh, st) [])
 
-let import verbose (token, owner, repo) db gh_user txt state =
+let import verbose ({token; owner; repo} as gh) db gh_user txt state =
   let next =
-    match Github.Issue.count ~verbose ?token ~owner ~repo () with
+    match Github.Issue.count ~verbose ~token ~owner ~repo () with
     | None ->
       failwith "Could not count issues, cannot proceed!"
     | Some n ->
@@ -179,7 +186,7 @@ let import verbose (token, owner, repo) db gh_user txt state =
         | None ->
           f a {finished; pt = Gist_created ("", [])}
         | Some gist ->
-          begin match Github.Gist.create ~verbose ?token gist with
+          begin match Github.Gist.create ~verbose ~token gist with
             | None ->
               Error state
             | Some gist_urls ->
@@ -191,14 +198,14 @@ let import verbose (token, owner, repo) db gh_user txt state =
     | (id, _) :: _, Gist_created gist_urls ->
       let issue = Hashtbl.find issues id in
       let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
-      begin match Github.Issue.import ~verbose ?token ~owner ~repo (gh_issue gist_urls) with
+      begin match Github.Issue.import ~verbose ~token ~owner ~repo (gh_issue gist_urls) with
         | None ->
           Error state
         | Some w ->
           f a {finished; pt = Waiting_for_import (gist_urls, w)}
       end
     | (id, gh_id) :: pending, Waiting_for_import (gist_urls, w) ->
-      begin match Github.Issue.check_imported ~verbose ?token ~owner ~repo w with
+      begin match Github.Issue.check_imported ~verbose ~token ~owner ~repo w with
         | Waiting w ->
           f a {finished; pt = Waiting_for_import (gist_urls, w)}
         | Failed ->
@@ -213,7 +220,7 @@ let import verbose (token, owner, repo) db gh_user txt state =
   in
   match f (List.drop state.finished a) state with
   | Error state ->
-    save_state state
+    save_state gh state
   | Ok () ->
     ()
 
@@ -248,9 +255,9 @@ let github_t =
   in
   let token =
     let doc = "Github token." in
-    Arg.(value & opt (some string) None & info ["token"] ~docs ~doc ~docv:"TOKEN")
+    Arg.(required & opt (some string) None & info ["token"] ~docs ~doc ~docv:"TOKEN")
   in
-  let github token (owner, repo) = (token, owner, repo) in
+  let github token (owner, repo) = {token; owner; repo} in
   Term.(const github $ token $ repo)
 
 let assignee_t =
