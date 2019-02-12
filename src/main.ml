@@ -156,7 +156,7 @@ let assignment db next bug_ids =
           Printf.fprintf oc "%4d %4d\n" id gh_id
         ) a
     );
-  List.map (fun (id, gh_id) -> Hashtbl.find issues id, gh_id) a
+  issues, a
 
 let import verbose (token, owner, repo) db assignee bug_ids =
   let next =
@@ -166,18 +166,19 @@ let import verbose (token, owner, repo) db assignee bug_ids =
     | Some n ->
         succ n
   in
-  let issues = assignment db next bug_ids in
+  let issues, a = assignment db next bug_ids in
   let gh_user =
     match assignee with
     | None -> begin fun s -> try Some (gh_user s) with Not_found -> None end
     | Some _ as x -> begin fun _ -> x end
   in
   let gh_ids =
-    let h = Hashtbl.create (List.length issues) in
-    List.iter (fun (issue, gh_id) -> Hashtbl.add h issue.Mantis.Issue.id gh_id) issues;
+    let h = Hashtbl.create (List.length a) in
+    List.iter (fun (id, gh_id) -> Hashtbl.add h id gh_id) a;
     Hashtbl.find h
   in
-  let f (total_time, count) (issue, gh_id) =
+  let f (total_time, count) (id, gh_id) =
+    let issue = Hashtbl.find issues id in
     let gh_issue, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
     let starttime = Unix.gettimeofday () in
     let gist_urls =
@@ -204,7 +205,7 @@ let import verbose (token, owner, repo) db assignee bug_ids =
           (truncate (total_time /. 3600.)) (truncate (total_time /. 60.));
         (total_time, succ count)
   in
-  List.fold_left f (0., 0) issues |> ignore
+  List.fold_left f (0., 0) a |> ignore
 
 open Cmdliner
 
