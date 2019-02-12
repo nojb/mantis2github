@@ -44,28 +44,20 @@ module List = struct
 end
 
 let with_out s f =
-  let oc = open_out s in
+  let oc = open_out_bin s in
   match f oc with
   | r ->
-      close_out oc;
-      Printf.eprintf "[OK] Wrote %s.\n%!" s;
-      r
+      close_out oc; r
   | exception exn ->
-      close_out oc;
-      Printf.eprintf "[ERR] Could not write %s.\n%!" s;
-      raise exn
+      close_out oc; raise exn
 
 let with_in s f =
   let ic = open_in_bin s in
   match f ic with
   | r ->
-      close_in ic;
-      Printf.eprintf "[OK] Read from %s.\n%!" s;
-      r
+      close_in ic; r
   | exception exn ->
-      close_in ic;
-      Printf.eprintf "[ERR] Could not read %s.\n%!" s;
-      raise exn
+      close_in ic; raise exn
 
 let gh_user = function
   | "administrator" -> "bactrian"
