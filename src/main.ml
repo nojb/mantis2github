@@ -199,8 +199,9 @@ let import verbose (token, owner, repo) db assignee bug_ids =
         let endtime = Unix.gettimeofday () in
         let dt = endtime -. starttime in
         let total_time = total_time +. dt in
-        Printf.printf "%4d %4d %6.1f %6.1f %6.1f\n%!"
-          issue.Mantis.Issue.id gh_id dt (total_time /. float count) total_time;
+        Printf.printf "%4d %4d %6.1f %6.1f %dh%02d\n%!"
+          issue.Mantis.Issue.id gh_id dt (total_time /. float count)
+          (truncate (total_time /. 3600.)) (truncate (total_time /. 60.));
         (total_time, succ count)
   in
   List.fold_left f (0., 0) issues |> ignore
