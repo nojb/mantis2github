@@ -66,7 +66,7 @@ module Issue : sig
   type waiting = int * Yojson.Basic.t * int
 
   type token =
-    | Failed
+    | Failed of {retry: bool}
     | Success of int
     | Waiting of waiting
 

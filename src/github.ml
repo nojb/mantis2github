@@ -168,7 +168,7 @@ module Issue = struct
   type waiting = int * Yojson.Basic.t * int
 
   type token =
-    | Failed
+    | Failed of {retry: bool}
     | Success of int
     | Waiting of waiting
 
@@ -178,7 +178,7 @@ module Issue = struct
   let check_imported ?verbose ?token ~owner ~repo (id, data, sleep) =
     Unix.sleep sleep;
     match Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id with
-    | None -> Failed
+    | None -> Failed {retry = true}
     | Some json ->
         begin match json |> J.member "status" |> J.to_string with
         | "imported" ->
@@ -195,11 +195,11 @@ module Issue = struct
         | "failed" ->
             let json = `Assoc ["issue", data; "error", json] in
             Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-            Failed
+            Failed {retry = false}
         | "pending" ->
             Waiting (id, data, 2 * sleep)
         | _ ->
-            Failed
+            assert false
         end
 
   let import ?verbose ?token ~owner ~repo issue =

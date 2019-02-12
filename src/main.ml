@@ -161,20 +161,20 @@ type state =
     pt: safepoint;
   }
 
-let save_state gh st =
-  with_out "resume_info.dat" (fun oc -> Marshal.to_channel oc (gh, st) [])
+let save_state gh st next =
+  with_out "resume_info.dat" (fun oc -> Marshal.to_channel oc (gh, st, next) [])
 
-let read_state () : (gh * state) =
+let read_state () : gh * state * int =
   with_in "resume_info.dat" (fun ic -> Marshal.from_channel ic)
 
-let import verbose ({token; owner; repo} as gh) db gh_user txt state =
-  let next =
-    match Github.Issue.count ~verbose ~token ~owner ~repo () with
-    | None ->
-        failwith "Could not count issues, cannot proceed!"
-    | Some n ->
-        succ n
-  in
+let get_next verbose {token; owner; repo} =
+  match Github.Issue.count ~verbose ~token ~owner ~repo () with
+  | None ->
+      failwith "Could not count issues, cannot proceed!"
+  | Some n ->
+      succ n
+
+let import verbose ({token; owner; repo} as gh) db gh_user txt state next =
   let issues = Mantis.Db.use db Mantis.fetch in
   let n = Hashtbl.length issues in
   let a =
@@ -192,7 +192,6 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
     Hashtbl.find h
   in
   let rec f a ({finished; pt} as state) =
-    save_state gh state;
     match a, pt with
     | [], Start_import -> Ok ()
     | (id, _) :: _, Start_import ->
@@ -224,7 +223,9 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
         begin match Github.Issue.check_imported ~verbose ~token ~owner ~repo w with
         | Waiting w ->
             f a {finished; pt = Waiting_for_import (gist_urls, w)}
-        | Failed ->
+        | Failed {retry = true} ->
+            Error state
+        | Failed {retry = false} ->
             Error {finished; pt = Gist_created gist_urls}
         | Success gh_id' ->
             if gh_id <> gh_id' then
@@ -238,13 +239,17 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
   in
   match f (List.drop state.finished a) state with
   | Error state ->
-      save_state gh state
+      save_state gh state next
   | Ok () ->
       ()
 
 let resume verbose db gh_user =
-  let gh, state = read_state () in
-  import verbose gh db gh_user None state
+  let gh, state, next = read_state () in
+  import verbose gh db gh_user None state next
+
+let import verbose gh db gh_user txt =
+  import verbose gh db gh_user txt
+    {finished = 0; pt = Start_import} (get_next verbose gh)
 
 open Cmdliner
 
@@ -293,7 +298,7 @@ let o_t =
 
 let import_cmd =
   let doc = "Import issues." in
-  Term.(const import $ verbose_t $ github_t $ const db $ assignee_t $ o_t $ const {finished = 0; pt = Start_import}),
+  Term.(const import $ verbose_t $ github_t $ const db $ assignee_t $ o_t),
   Term.info "import" ~doc
 
 let resume_cmd =
