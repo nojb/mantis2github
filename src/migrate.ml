@@ -136,7 +136,7 @@ module Issue = struct
       ~created_at
       ~description
       ~steps_to_reproduce
-      ~additional_information (gist_url, file_urls)
+      ~additional_information file_urls
     =
     let note title contents l =
       let title = Printf.sprintf "*%s*\n\n" title in
@@ -150,11 +150,9 @@ module Issue = struct
       match file_urls with
       | [] -> ""
       | _ :: _ ->
-          let lines =
-            List.map (fun (filename, url) -> Printf.sprintf "- [%s](%s)\n" filename url) file_urls
-            @ [Printf.sprintf "\n*[gist](%s)*\n" gist_url]
-          in
-          String.concat "" lines
+          file_urls
+          |> List.map (fun (filename, url) -> Printf.sprintf "- [%s](%s)\n" filename url)
+          |> String.concat ""
     in
     note "Bug description" description
       (note "Steps to reproduce" steps_to_reproduce

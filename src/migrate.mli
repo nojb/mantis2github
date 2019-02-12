@@ -31,5 +31,5 @@ module Issue : sig
   val migrate:
     owner:string -> repo:string ->
     gh_user:(string -> string option) -> gh_ids:(int -> int) ->
-    Mantis.Issue.t -> ((string * (string * string) list) -> Github.Issue.t) * Github.Gist.t option
+    Mantis.Issue.t -> ((string * string) list -> Github.Issue.t) * Github.Gist.t option
 end

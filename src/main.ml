@@ -153,8 +153,8 @@ let output_assignment oc a =
 
 type safepoint =
   | Start_import
-  | Gist_created of (string * (string * string) list)
-  | Waiting_for_import of (string * (string * string) list) * Github.Issue.waiting
+  | Gist_created of (string * string) list
+  | Waiting_for_import of (string * string) list * Github.Issue.waiting
 
 type gh =
   {
@@ -184,6 +184,7 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
         succ n
   in
   let issues = Mantis.Db.use db Mantis.fetch in
+  let n = Hashtbl.length issues in
   let a =
     Hashtbl.fold (fun id _ acc -> id :: acc) issues []
     |> compute_assignment next
@@ -207,7 +208,7 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
         let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
         begin match gh_gist with
         | None ->
-            f a {finished; pt = Gist_created ("", [])}
+            f a {finished; pt = Gist_created []}
         | Some gist ->
             begin match Github.Gist.create ~verbose ~token gist with
             | None ->
@@ -237,8 +238,10 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
             if gh_id <> gh_id' then
               Printf.ksprintf failwith
                 "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)" id gh_id gh_id';
-            Printf.printf "%4d => %4d\n%!" id gh_id;
-            f pending {finished = succ finished; pt = Start_import}
+            let finished = succ finished in
+            Printf.printf "%4d => %4d (%d%%)\n%!" id gh_id
+              (truncate (float finished /. float n));
+            f pending {finished; pt = Start_import}
         end
   in
   match f (List.drop state.finished a) state with

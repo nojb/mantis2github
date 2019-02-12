@@ -84,5 +84,5 @@ module Gist : sig
       public: bool;
     }
 
-  val create: ?verbose:bool -> ?token:string -> t -> (string * (string * string) list) option
+  val create: ?verbose:bool -> ?token:string -> t -> (string * string) list option
 end

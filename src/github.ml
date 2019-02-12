@@ -289,7 +289,7 @@ module Gist = struct
     let data = dummy gist.description |> to_json in
     match Api.post ?verbose ~data ?token "/gists" with
     | Some json ->
-        let html_url = J.member "html_url" json |> J.to_string in
+        let _html_url = J.member "html_url" json |> J.to_string in
         let git_pull_url = J.member "git_pull_url" json |> J.to_string in
         let id = Scanf.sscanf git_pull_url "https://gist.github.com/%s@.git" (fun s -> s) in
         clone ?verbose ?token id gist.files;
@@ -306,7 +306,7 @@ module Gist = struct
             in
             assert (List.sort Stdlib.compare (List.map fst files_urls) =
                     List.sort Stdlib.compare (List.map fst gist.files));
-            Some (html_url, files_urls)
+            Some files_urls
         end
     | None ->
         None
