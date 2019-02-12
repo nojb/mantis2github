@@ -136,7 +136,10 @@ let assignment issues next =
   |> go [] S.empty next
   |> List.sort (fun (_, gh_id1) (_, gh_id2) -> Stdlib.compare gh_id1 gh_id2)
 
-let import verbose (token, owner, repo) db assignee bug_ids =
+let output_assignment oc a =
+  List.iter (fun (id, gh_id) -> Printf.fprintf oc "%4d %4d\n" id gh_id) a
+
+let import verbose (token, owner, repo) db assignee txt bug_ids =
   let next =
     match Github.Issue.count ~verbose ?token ~owner ~repo () with
     | None ->
@@ -158,11 +161,12 @@ let import verbose (token, owner, repo) db assignee bug_ids =
     end
   in
   let a = assignment issues next in
-  with_out "assign.txt" (fun oc ->
-      List.iter (fun (id, gh_id) ->
-          Printf.fprintf oc "%4d %4d\n" id gh_id
-        ) a
-    );
+  begin match txt with
+  | Some txt ->
+    with_out txt (fun oc -> output_assignment oc a)
+  | None ->
+    output_assignment stdout a
+  end;
   let gh_user =
     match assignee with
     | None -> begin fun s -> try Some (gh_user s) with Not_found -> None end
@@ -247,9 +251,13 @@ let assignee_t =
   let doc = "Override assignee." in
   Arg.(value & opt (some string) None & info ["assignee"] ~doc)
 
+let o_t =
+  let doc = "Output assignment." in
+  Arg.(value & opt (some string) None & info ["o"] ~doc)
+
 let import_cmd =
   let doc = "Import issues." in
-  Term.(const import $ verbose_t $ github_t $ const db $ assignee_t $ bug_ids_t),
+  Term.(const import $ verbose_t $ github_t $ const db $ assignee_t $ o_t $ bug_ids_t),
   Term.info "import" ~doc
 
 let default_cmd =
