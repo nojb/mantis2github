@@ -100,7 +100,7 @@ let extract db =
   in
   Hashtbl.iter f issues
 
-let assignment issues next =
+let compute_assignment next l =
   let module S = Set.Make (struct type t = int let compare = Stdlib.compare end) in
   let rec go assigned unassigned next = function
     | id :: ids as ids' ->
@@ -111,9 +111,6 @@ let assignment issues next =
         else (* id > next *)
           begin match S.min_elt_opt unassigned with
           | None ->
-              Printf.eprintf
-                "[WARNING] gap cannot be filled by unassigned issues (id=%d,next=%d)\n%!"
-                id next;
               go ((id, next) :: assigned) unassigned (succ next) ids
           | Some id ->
               go ((id, next) :: assigned) (S.remove id unassigned) (succ next) ids'
@@ -126,10 +123,18 @@ let assignment issues next =
         in
         loop unassigned assigned next
   in
-  Hashtbl.fold (fun id _ acc -> id :: acc) issues []
-  |> List.sort Stdlib.compare
+  List.sort Stdlib.compare l
   |> go [] S.empty next
-  |> List.sort (fun (_, gh_id1) (_, gh_id2) -> Stdlib.compare gh_id1 gh_id2)
+  |> List.sort (fun (_, x) (_, y) -> Stdlib.compare x y)
+
+let () =
+  let t n l l' = assert (compute_assignment n l = l') in
+  t 2 [1; 2; 3; 4] [(2, 2); (3, 3); (4, 4); (1, 5)];
+  t 2 [4; 5] [(4, 2); (5, 3)];
+  t 3 [3; 5] [(3, 3); (5, 4)];
+  t 9 [3; 5] [(3, 9); (5, 10)];
+  t 1 [3; 5] [(3, 1); (5, 2)];
+  t 3 [5; 3] [(3, 3); (5, 4)]
 
 let output_assignment oc a =
   List.iter (fun (id, gh_id) -> Printf.fprintf oc "%4d %4d\n" id gh_id) a
@@ -164,7 +169,10 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state =
         succ n
   in
   let issues = Mantis.Db.use db Mantis.fetch in
-  let a = assignment issues next in
+  let a =
+    Hashtbl.fold (fun id _ acc -> id :: acc) issues []
+    |> compute_assignment next
+  in
   begin match txt with
   | Some txt ->
       with_out txt (fun oc -> output_assignment oc a)
