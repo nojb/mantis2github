@@ -165,7 +165,7 @@ let assignment db next bug_ids =
     );
   List.map (fun (id, gh_id) -> Hashtbl.find issues id, gh_id) a
 
-let import verbose dry_run (token, owner, repo) db assignee bug_ids =
+let import verbose (token, owner, repo) db assignee bug_ids =
   let next =
     match Github.Issue.count ~verbose ?token ~owner ~repo () with
     | None ->
@@ -184,7 +184,7 @@ let import verbose dry_run (token, owner, repo) db assignee bug_ids =
     List.iter (fun (issue, gh_id) -> Hashtbl.add h issue.Mantis.Issue.id gh_id) issues;
     Hashtbl.find h
   in
-  let f (total_retries, total_time, count) (issue, gh_id) =
+  let f (total_time, count) (issue, gh_id) =
     let gh_issue, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
     let starttime = Unix.gettimeofday () in
     let gist_urls =
@@ -197,22 +197,20 @@ let import verbose dry_run (token, owner, repo) db assignee bug_ids =
           end
     in
     match Github.Issue.import ~verbose ?token ~owner ~repo (gh_issue gist_urls) with
-    | Error _ ->
+    | None ->
         failwith "Import failed! Abort"
-    | Ok (gh_id', retries) ->
+    | Some gh_id' ->
         if gh_id <> gh_id' then
           Printf.ksprintf failwith "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)"
             issue.Mantis.Issue.id gh_id gh_id';
         let endtime = Unix.gettimeofday () in
         let dt = endtime -. starttime in
         let total_time = total_time +. dt in
-        let total_retries = total_retries + retries in
-        Printf.printf "%4d %4d %2d %2d %6d %6.1f %6.1f %6.1f\n%!"
-          issue.Mantis.Issue.id gh_id retries (truncate (float total_retries /. float count))
-          total_retries dt (total_time /. float count) total_time;
-        (total_retries, total_time, succ count)
+        Printf.printf "%4d %4d %6.1f %6.1f %6.1f\n%!"
+          issue.Mantis.Issue.id gh_id dt (total_time /. float count) total_time;
+        (total_time, succ count)
   in
-  if not dry_run then List.fold_left f (0, 0., 0) issues |> ignore
+  List.fold_left f (0., 0) issues |> ignore
 
 open Cmdliner
 
@@ -280,13 +278,9 @@ let assignee_t =
   let doc = "Override assignee." in
   Arg.(value & opt (some string) None & info ["assignee"] ~doc)
 
-let dry_run_t =
-  let doc = "Dry run." in
-  Arg.(value & flag & info ["dry-run"] ~doc)
-
 let import_cmd =
   let doc = "Import issues." in
-  Term.(const import $ verbose_t $ dry_run_t $ github_t $ db_t $ assignee_t $ bug_ids_t),
+  Term.(const import $ verbose_t $ github_t $ db_t $ assignee_t $ bug_ids_t),
   Term.info "import" ~doc
 
 let default_cmd =

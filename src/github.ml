@@ -215,17 +215,17 @@ module Issue = struct
     let data = to_json issue in
     match Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo with
     | None ->
-        Error 0
+        None
     | Some json ->
         let id = json |> J.member "id" |> J.to_int in
         let rec loop n retries =
           Unix.sleep n;
           match is_imported ?verbose ?token ~repo ~owner id with
-          | Some (Ok id) -> Ok (id, retries)
+          | Some (Ok id) -> Some id
           | Some (Error err) ->
               let json = `Assoc ["issue", data; "error", err] in
               Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-              Error retries
+              None
           | None ->
               loop (2 * n) (succ retries)
         in
