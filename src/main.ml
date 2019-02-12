@@ -105,13 +105,6 @@ let extract db ids =
   in
   Mantis.Db.use db f
 
-let milestones (token, owner, repo) =
-  match Github.Milestone.list ?token ~owner ~repo () with
-  | Some l ->
-      List.iter print_endline (List.map fst l)
-  | None ->
-      ()
-
 module IntSet = Set.Make (struct type t = int let compare = Stdlib.compare end)
 
 let assignment db next bug_ids =
@@ -269,11 +262,6 @@ let github_t =
   let github token (owner, repo) = (token, owner, repo) in
   Term.(const github $ token $ repo)
 
-let milestones_cmd =
-  let doc = "List Github milestones." in
-  Term.(const milestones $ github_t),
-  Term.info "milestones" ~doc
-
 let assignee_t =
   let doc = "Override assignee." in
   Arg.(value & opt (some string) None & info ["assignee"] ~doc)
@@ -290,22 +278,10 @@ let default_cmd =
   Term.(ret (const (`Help (`Pager, None)))),
   Term.info "mantis2github" ~version:"v0.1" ~doc ~sdocs ~exits
 
-let get_labels verbose (token, owner, repo) =
-  match Github.Label.list ~verbose ?token ~owner ~repo () with
-  | None -> failwith "Could not retrieve labels"
-  | Some l -> List.iter print_endline l
-
-let labels_cmd =
-  let doc = "List github labels." in
-  Term.(const get_labels $ verbose_t $ github_t),
-  Term.info "labels" ~doc
-
 let cmds =
   [
     extract_cmd;
-    milestones_cmd;
     import_cmd;
-    labels_cmd;
   ]
 
 let () =

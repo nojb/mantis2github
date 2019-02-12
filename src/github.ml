@@ -97,30 +97,6 @@ module Api = struct
     Printf.ksprintf (curl POST ?verbose ?headers ?data ?token) fmt
 end
 
-module Label = struct
-  let list ?verbose ?token ~owner ~repo () =
-    match Api.get ?verbose ?token "/repos/%s/%s/labels" owner repo with
-    | None -> None
-    | Some json ->
-        let f json = Some (J.member "name" json |> J.to_string) in
-        Some (json |> J.to_list |> J.filter_map f)
-end
-
-module Milestone = struct
-  let list ?verbose ?token ~owner ~repo () =
-    let params = ["state", "all"] in
-    match Api.get ?verbose ~params ?token "/repos/%s/%s/milestones" owner repo with
-    | None ->
-        None
-    | Some json ->
-        let f json =
-          let title = json |> J.member "title" |> J.to_string in
-          let number = json |> J.member "number" |> J.to_int in
-          Some (title, number)
-        in
-        Some (json |> J.to_list |> J.filter_map f)
-end
-
 let str s1 s2 l =
   match s2 with
   | None -> l
