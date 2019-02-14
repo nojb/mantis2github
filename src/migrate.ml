@@ -253,7 +253,7 @@ module Issue = struct
       | _ :: _ ->
           let description =
             Printf.sprintf "https://github.com/%s/%s/issues/%d"
-              owner repo (gh_ids id)
+              owner repo (try gh_ids id with Not_found -> 1000)
           in
           Some {Github.Gist.files; description; public = true}
     in

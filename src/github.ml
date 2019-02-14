@@ -304,6 +304,9 @@ module Gist = struct
                   filename, url
                 )
             in
+            prerr_endline "hola";
+            Yojson.Basic.pretty_to_channel ~std:true stderr data;
+            flush stderr;
             assert (List.sort Stdlib.compare (List.map fst files_urls) =
                     List.sort Stdlib.compare (List.map fst gist.files));
             Some files_urls

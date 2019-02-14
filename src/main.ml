@@ -243,6 +243,43 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state next =
   | Ok () ->
       ()
 
+let import_one verbose {token; owner; repo} db gh_user id =
+  let issues = Mantis.Db.use db Mantis.fetch in
+  let gh_ids _ = raise Not_found in
+  let issue = Hashtbl.find issues id in
+  let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
+  let gist_urls =
+    match gh_gist with
+    | None ->
+        []
+    | Some gist ->
+        begin match Github.Gist.create ~verbose ~token gist with
+        | None ->
+            failwith "could not create gist"
+        | Some gist_urls ->
+            gist_urls
+        end
+  in
+  let issue = Hashtbl.find issues id in
+  let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
+  let w =
+    match Github.Issue.import ~verbose ~token ~owner ~repo (gh_issue gist_urls) with
+    | None ->
+        failwith "could not start import"
+    | Some w ->
+        w
+  in
+  let rec loop w =
+    match Github.Issue.check_imported ~verbose ~token ~owner ~repo w with
+    | Waiting w ->
+        loop w
+    | Failed _ ->
+        failwith "Failed"
+    | Success gh_id ->
+        Printf.printf "%4d => %4d\n%!" id gh_id
+  in
+  loop w
+
 let resume verbose db gh_user =
   let gh, state, next = read_state () in
   import verbose gh db gh_user None state next
@@ -301,6 +338,15 @@ let import_cmd =
   Term.(const import $ verbose_t $ github_t $ const db $ assignee_t $ o_t),
   Term.info "import" ~doc
 
+let id_t =
+  let doc = "Bug number." in
+  Arg.(required & pos 1 (some int) None & info [] ~doc)
+
+let import_one_cmd =
+  let doc = "Import single issues." in
+  Term.(const import_one $ verbose_t $ github_t $ const db $ assignee_t $ id_t),
+  Term.info "import-one" ~doc
+
 let resume_cmd =
   let doc = "Resume issues." in
   Term.(const resume $ verbose_t $ const db $ assignee_t),
@@ -317,6 +363,7 @@ let cmds =
   [
     extract_cmd;
     import_cmd;
+    import_one_cmd;
     resume_cmd;
   ]
 
