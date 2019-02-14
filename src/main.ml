@@ -59,6 +59,19 @@ let with_in s f =
   | exception exn ->
       close_in ic; raise exn
 
+let issues =
+  let db =
+    {
+      Mysql.dbuser = Some "root";
+      dbpwd = None;
+      dbhost = Some "127.0.0.1";
+      dbport = None;
+      dbsocket = None;
+      dbname = Some "db";
+    }
+  in
+  Mantis.Db.use db Mantis.fetch
+
 let gh_user = function
   | "administrator" -> "bactrian"
   | "xleroy" -> "xavierleroy"
@@ -96,8 +109,7 @@ let gh_user = function
 let gh_user s =
   try Some (gh_user s) with Not_found -> None
 
-let extract db =
-  let issues = Mantis.Db.use db Mantis.fetch in
+let extract () =
   let f _ issue =
     let json = Mantis.Issue.to_json issue in
     Printf.printf "%a\n" (Yojson.Basic.pretty_to_channel ~std:true) json
@@ -174,8 +186,7 @@ let get_next verbose {token; owner; repo} =
   | Some n ->
       succ n
 
-let import verbose ({token; owner; repo} as gh) db gh_user txt state next =
-  let issues = Mantis.Db.use db Mantis.fetch in
+let import verbose ({token; owner; repo} as gh) gh_user txt state next =
   let n = Hashtbl.length issues in
   let a =
     Hashtbl.fold (fun id _ acc -> id :: acc) issues []
@@ -243,8 +254,7 @@ let import verbose ({token; owner; repo} as gh) db gh_user txt state next =
   | Ok () ->
       ()
 
-let import_one verbose {token; owner; repo} db gh_user id =
-  let issues = Mantis.Db.use db Mantis.fetch in
+let import_one verbose {token; owner; repo} gh_user id =
   let gh_ids _ = raise Not_found in
   let issue = Hashtbl.find issues id in
   let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
@@ -280,25 +290,15 @@ let import_one verbose {token; owner; repo} db gh_user id =
   in
   loop w
 
-let resume verbose db gh_user =
+let resume verbose gh_user =
   let gh, state, next = read_state () in
-  import verbose gh db gh_user None state next
+  import verbose gh gh_user None state next
 
-let import verbose gh db gh_user txt =
-  import verbose gh db gh_user txt
+let import verbose gh gh_user txt =
+  import verbose gh gh_user txt
     {finished = 0; pt = Start_import} (get_next verbose gh)
 
 open Cmdliner
-
-let db =
-  {
-    Mysql.dbuser = Some "root";
-    dbpwd = None;
-    dbhost = Some "127.0.0.1";
-    dbport = None;
-    dbsocket = None;
-    dbname = Some "db";
-  }
 
 let verbose_t =
   let doc = "Be verbose." in
@@ -306,9 +306,7 @@ let verbose_t =
 
 let extract_cmd =
   let doc = "Extract Mantis into JSON" in
-  let exits = Term.default_exits in
-  Term.(const extract $ const db),
-  Term.info "extract" ~doc ~sdocs:Manpage.s_common_options ~exits
+  Term.(const extract $ const ()), Term.info "extract" ~doc
 
 let github_t =
   let docs = Manpage.s_options in
@@ -335,7 +333,7 @@ let o_t =
 
 let import_cmd =
   let doc = "Import issues." in
-  Term.(const import $ verbose_t $ github_t $ const db $ assignee_t $ o_t),
+  Term.(const import $ verbose_t $ github_t $ assignee_t $ o_t),
   Term.info "import" ~doc
 
 let id_t =
@@ -344,12 +342,12 @@ let id_t =
 
 let import_one_cmd =
   let doc = "Import single issues." in
-  Term.(const import_one $ verbose_t $ github_t $ const db $ assignee_t $ id_t),
+  Term.(const import_one $ verbose_t $ github_t $ assignee_t $ id_t),
   Term.info "import-one" ~doc
 
 let resume_cmd =
   let doc = "Resume issues." in
-  Term.(const resume $ verbose_t $ const db $ assignee_t),
+  Term.(const resume $ verbose_t $ assignee_t),
   Term.info "resume" ~doc
 
 let default_cmd =
