@@ -63,17 +63,13 @@ module Issue : sig
       comments: Comment.t list;
     }
 
-  type waiting = int * Yojson.Basic.t * int
+  type res =
+    | Imported of int
+    | Failed
+    | Pending
 
-  type token =
-    | Failed of {retry: bool}
-    | Success of int
-    | Waiting of waiting
-
-  val import: ?verbose:bool -> ?token:string -> owner:string -> repo:string -> t -> waiting option
-  val check_imported: ?verbose:bool -> ?token:string -> owner:string ->repo:string -> waiting -> token
-
-  val count: ?verbose:bool -> ?token:string -> owner:string -> repo:string -> unit -> int option
+  val import: ?verbose:bool -> ?token:string -> string * string -> t -> int
+  val check_imported: ?verbose:bool -> ?token:string -> string * string -> int -> res
 end
 
 module Gist : sig
@@ -84,5 +80,5 @@ module Gist : sig
       public: bool;
     }
 
-  val create: ?verbose:bool -> ?token:string -> t -> (string * string) list option
+  val create: ?verbose:bool -> ?token:string -> t -> (string * string) list
 end

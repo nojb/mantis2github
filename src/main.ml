@@ -29,6 +29,18 @@
    issues. They must have sufficient permissions to do so and be a subset of
    caml-devel subscribers. *)
 
+module Hashtbl = struct
+  include Hashtbl
+
+  let keys h =
+    fold (fun k _ acc -> k :: acc) h []
+
+  let of_assoc l =
+    let h = Hashtbl.create (List.length l) in
+    List.iter (fun (k, v) -> add h k v) l;
+    h
+end
+
 module List = struct
   include List
 
@@ -118,11 +130,6 @@ let () =
 let output_assignment oc a =
   List.iter (fun (id, gh_id) -> Printf.fprintf oc "%4d %4d\n" id gh_id) a
 
-type safepoint =
-  | Start_import
-  | Gist_created of (string * string) list
-  | Waiting_for_import of (string * string) list * Github.Issue.waiting
-
 type gh =
   {
     token: string;
@@ -130,137 +137,74 @@ type gh =
     repo: string;
   }
 
-type state =
-  {
-    finished: int;
-    pt: safepoint;
-  }
+(* let get_next verbose {token; owner; repo} = *)
+(*   match Github.Issue.count ~verbose ~token ~owner ~repo () with *)
+(*   | None -> *)
+(*       failwith "Could not count issues, cannot proceed!" *)
+(*   | Some n -> *)
+(*       succ n *)
 
-let save_state gh st next =
-  with_out "resume_info.dat" (fun oc -> Marshal.to_channel oc (gh, st, next) [])
-
-let read_state () : gh * state * int =
-  with_in "resume_info.dat" (fun ic -> Marshal.from_channel ic)
-
-let get_next verbose {token; owner; repo} =
-  match Github.Issue.count ~verbose ~token ~owner ~repo () with
-  | None ->
-      failwith "Could not count issues, cannot proceed!"
-  | Some n ->
-      succ n
-
-let import verbose ({token; owner; repo} as gh) txt state next =
-  let n = Hashtbl.length issues in
-  let a =
-    Hashtbl.fold (fun id _ acc -> id :: acc) issues []
-    |> compute_assignment next
-  in
+let import verbose token repo txt next =
+  let a = Hashtbl.keys issues |> compute_assignment next in
   begin match txt with
   | None -> ()
   | Some txt ->
       with_out txt (fun oc -> output_assignment oc a)
   end;
-  let gh_ids =
-    let h = Hashtbl.create (List.length a) in
-    List.iter (fun (id, gh_id) -> Hashtbl.add h id gh_id) a;
-    Hashtbl.find h
+  let gh_ids = Hashtbl.find (Hashtbl.of_assoc a) in
+  let rec f id =
+    let issue = Hashtbl.find issues id in
+    let gh_issue, gh_gist = Migrate.Issue.migrate repo ~gh_ids issue in
+    let gist_urls =
+      match gh_gist with
+      | None -> []
+      | Some gist -> Github.Gist.create ~verbose ?token gist
+    in
+    let iid = Github.Issue.import ~verbose ?token repo (gh_issue gist_urls) in
+    let rec loop sleep =
+      Unix.sleep sleep;
+      match Github.Issue.check_imported ~verbose ?token repo iid with
+      | Pending ->
+        loop (2 * sleep)
+      | Failed ->
+        failwith "import failed"
+      | Imported gh_id' ->
+        let gh_id = gh_ids id in
+        if gh_id <> gh_id' then
+          Printf.ksprintf failwith
+            "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)" id gh_id gh_id';
+        Printf.printf "%4d => %4d\n%!" id gh_id
+    in
+    loop 1;
+    f (succ id)
   in
-  let rec f a ({finished; pt} as state) =
-    save_state gh state next;
-    match a, pt with
-    | [], Start_import -> Ok ()
-    | (id, _) :: _, Start_import ->
-        let issue = Hashtbl.find issues id in
-        let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_ids issue in
-        begin match gh_gist with
-        | None ->
-            f a {finished; pt = Gist_created []}
-        | Some gist ->
-            begin match Github.Gist.create ~verbose ~token gist with
-            | None ->
-                Error state
-            | Some gist_urls ->
-                f a {finished; pt = Gist_created gist_urls}
-            end
-        end
-    | [], (Gist_created _ | Waiting_for_import _) ->
-        assert false
-    | (id, _) :: _, Gist_created gist_urls ->
-        let issue = Hashtbl.find issues id in
-        let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_ids issue in
-        begin match Github.Issue.import ~verbose ~token ~owner ~repo (gh_issue gist_urls) with
-        | None ->
-            Error state
-        | Some w ->
-            f a {finished; pt = Waiting_for_import (gist_urls, w)}
-        end
-    | (id, gh_id) :: pending, Waiting_for_import (gist_urls, w) ->
-        begin match Github.Issue.check_imported ~verbose ~token ~owner ~repo w with
-        | Waiting w ->
-            f a {finished; pt = Waiting_for_import (gist_urls, w)}
-        | Failed {retry = true} ->
-            Error state
-        | Failed {retry = false} ->
-            Error {finished; pt = Gist_created gist_urls}
-        | Success gh_id' ->
-            if gh_id <> gh_id' then
-              Printf.ksprintf failwith
-                "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)" id gh_id gh_id';
-            let finished = succ finished in
-            Printf.printf "%4d => %4d (%d%%)\n%!" id gh_id
-              (truncate (float finished /. float n));
-            f pending {finished; pt = Start_import}
-        end
-  in
-  match f (List.drop state.finished a) state with
-  | Error _state ->
-      ()
-  | Ok () ->
-      ()
+  f 1
 
-let import_one verbose {token; owner; repo} id =
-  let gh_ids _ = raise Not_found in
+let import_one verbose token repo id =
+  let a = Hashtbl.keys issues |> compute_assignment 1 in
+  let gh_ids = Hashtbl.find (Hashtbl.of_assoc a) in
   let issue = Hashtbl.find issues id in
-  let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_ids issue in
+  let gh_issue, gh_gist = Migrate.Issue.migrate repo ~gh_ids issue in
   let gist_urls =
     match gh_gist with
-    | None ->
-        []
-    | Some gist ->
-        begin match Github.Gist.create ~verbose ~token gist with
-        | None ->
-            failwith "could not create gist"
-        | Some gist_urls ->
-            gist_urls
-        end
+    | None -> []
+    | Some gist -> Github.Gist.create ~verbose ?token gist
   in
-  let issue = Hashtbl.find issues id in
-  let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_ids issue in
-  let w =
-    match Github.Issue.import ~verbose ~token ~owner ~repo (gh_issue gist_urls) with
-    | None ->
-        failwith "could not start import"
-    | Some w ->
-        w
-  in
-  let rec loop w =
-    match Github.Issue.check_imported ~verbose ~token ~owner ~repo w with
-    | Waiting w ->
-        loop w
-    | Failed _ ->
+  let iid = Github.Issue.import ~verbose ?token repo (gh_issue gist_urls) in
+  let rec loop sleep =
+    Unix.sleep sleep;
+    match Github.Issue.check_imported ~verbose ?token repo iid with
+    | Pending ->
+        loop (2 * sleep)
+    | Failed ->
         failwith "Failed"
-    | Success gh_id ->
+    | Imported gh_id ->
         Printf.printf "%4d => %4d\n%!" id gh_id
   in
-  loop w
+  loop 1
 
-let resume verbose =
-  let gh, state, next = read_state () in
-  import verbose gh None state next
-
-let import verbose gh txt =
-  import verbose gh txt
-    {finished = 0; pt = Start_import} (get_next verbose gh)
+let import verbose token repo txt =
+  import verbose token repo txt 1 (* (get_next verbose gh) *)
 
 open Cmdliner
 
@@ -272,19 +216,13 @@ let extract_cmd =
   let doc = "Extract Mantis into JSON" in
   Term.(const extract $ const ()), Term.info "extract" ~doc
 
-let github_t =
-  let docs = Manpage.s_options in
-  let repo =
-    let doc = "Github repository." in
-    Arg.(required & pos 0 (some (pair ~sep:'/' string string)) None &
-         info [] ~docs ~doc ~docv:"OWNER/REPO")
-  in
-  let token =
-    let doc = "Github token." in
-    Arg.(required & opt (some string) None & info ["token"] ~docs ~doc ~docv:"TOKEN")
-  in
-  let github token (owner, repo) = {token; owner; repo} in
-  Term.(const github $ token $ repo)
+let token_t =
+  let doc = "Github token." in
+  Arg.(value & opt (some string) None & info ["token"] ~doc ~docv:"TOKEN")
+
+let repo_t =
+  let doc = "Github repository." in
+  Arg.(required & pos 0 (some (pair ~sep:'/' string string)) None & info [] ~doc ~docv:"OWNER/REPO")
 
 let o_t =
   let doc = "Output assignment." in
@@ -292,7 +230,7 @@ let o_t =
 
 let import_cmd =
   let doc = "Import issues." in
-  Term.(const import $ verbose_t $ github_t $ o_t),
+  Term.(const import $ verbose_t $ token_t $ repo_t $ o_t),
   Term.info "import" ~doc
 
 let id_t =
@@ -301,13 +239,8 @@ let id_t =
 
 let import_one_cmd =
   let doc = "Import single issues." in
-  Term.(const import_one $ verbose_t $ github_t $ id_t),
+  Term.(const import_one $ verbose_t $ token_t $ repo_t $ id_t),
   Term.info "import-one" ~doc
-
-let resume_cmd =
-  let doc = "Resume issues." in
-  Term.(const resume $ verbose_t),
-  Term.info "resume" ~doc
 
 let default_cmd =
   let doc = "a Mantis => Github migration tool" in
@@ -321,7 +254,6 @@ let cmds =
     extract_cmd;
     import_cmd;
     import_one_cmd;
-    resume_cmd;
   ]
 
 let () =

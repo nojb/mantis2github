@@ -165,79 +165,45 @@ module Issue = struct
       comments: Comment.t list;
     }
 
-  type waiting = int * Yojson.Basic.t * int
-
-  type token =
-    | Failed of {retry: bool}
-    | Success of int
-    | Waiting of waiting
-
   let to_json {issue; comments} =
     `Assoc ["issue", Issue.to_json issue; "comments", `List (List.map Comment.to_json comments)]
 
-  let check_imported ?verbose ?token ~owner ~repo (id, data, sleep) =
-    Unix.sleep sleep;
-    match Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id with
-    | None -> Failed {retry = true}
-    | Some json ->
-        begin match json |> J.member "status" |> J.to_string with
-        | "imported" ->
-            let id =
-              json
-              |> J.member "issue_url"
-              |> J.to_string
-              |> String.split_on_char '/'
-              |> List.rev
-              |> List.hd
-              |> int_of_string
-            in
-            Success id
-        | "failed" ->
-            let json = `Assoc ["issue", data; "error", json] in
-            Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-            Failed {retry = false}
-        | "pending" ->
-            Waiting (id, data, 2 * sleep)
-        | _ ->
-            assert false
-        end
+  type res =
+    | Imported of int
+    | Failed
+    | Pending
 
-  let import ?verbose ?token ~owner ~repo issue =
-    let data = to_json issue in
-    match Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo with
-    | None ->
-        None
-    | Some json ->
-        let id = json |> J.member "id" |> J.to_int in
-        Some (id, data, 1)
-
-  let count ?verbose ?token ~owner ~repo () =
-    let query =
-      Printf.sprintf {|
-query {
-  repository(owner:"%s", name:"%s") {
-    pullRequests {
-      totalCount
-    }
-    issues {
-      totalCount
-    }
-  }
-}
-    |} owner repo
+  let check_imported ?verbose ?token (owner, repo) id =
+    let json =
+      match Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id with
+      | None -> failwith "Could not retrieve import status"
+      | Some json -> json
     in
-    let data = `Assoc ["query", `String query] in
-    match Api.post ?verbose ?token ~data "/graphql" with
-    | None -> None
-    | Some json ->
-        let json =
-          json
-          |> J.member "data"
-          |> J.member "repository"
-        in
-        let pr_count = json |> J.member "pullRequests" |> J.member "totalCount" |> J.to_int in
-        let issue_count = json |> J.member "issues" |> J.member "totalCount" |> J.to_int in
-        Some (pr_count + issue_count)
+    match json |> J.member "status" |> J.to_string with
+    | "imported" ->
+      let id =
+        json
+        |> J.member "issue_url"
+        |> J.to_string
+        |> String.split_on_char '/'
+        |> List.rev
+        |> List.hd
+        |> int_of_string
+      in
+      Imported id
+    | "failed" -> Failed
+    | "pending" -> Pending
+    | _ ->
+      assert false
+
+  let import ?verbose ?token (owner, repo) issue =
+    let data = to_json issue in
+    let json =
+      match Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo with
+      | None -> failwith "Could not start issue import"
+      | Some json -> json
+    in
+    json |> J.member "id" |> J.to_int
 end
 
 module Gist = struct
@@ -287,27 +253,29 @@ module Gist = struct
 
   let create ?verbose ?token gist =
     let data = dummy gist.description |> to_json in
-    match Api.post ?verbose ~data ?token "/gists" with
-    | Some json ->
-        let _html_url = J.member "html_url" json |> J.to_string in
-        let git_pull_url = J.member "git_pull_url" json |> J.to_string in
-        let id = Scanf.sscanf git_pull_url "https://gist.github.com/%s@.git" (fun s -> s) in
-        clone ?verbose ?token id gist.files;
-        begin match Api.get ?verbose ?token "/gists/%s" id with
-        | None -> None
-        | Some json ->
-            let files_urls =
-              J.member "files" json |> J.to_assoc |>
-              List.map (fun (_, json) ->
-                  let filename = json |> J.member "filename" |> J.to_string in
-                  let url = json |> J.member "raw_url" |> J.to_string in
-                  filename, url
-                )
-            in
-            (* assert (List.sort Stdlib.compare (List.map fst files_urls) = *)
-            (*         List.sort Stdlib.compare (List.map fst gist.files)); *)
-            Some files_urls
-        end
-    | None ->
-        None
+    let json =
+      match Api.post ?verbose ~data ?token "/gists" with
+      | Some json -> json
+      | None -> failwith "Could not create gist"
+    in
+    let _html_url = J.member "html_url" json |> J.to_string in
+    let git_pull_url = J.member "git_pull_url" json |> J.to_string in
+    let id = Scanf.sscanf git_pull_url "https://gist.github.com/%s@.git" (fun s -> s) in
+    clone ?verbose ?token id gist.files;
+    let json =
+      match Api.get ?verbose ?token "/gists/%s" id with
+      | None -> failwith "Could not retrieve gist"
+      | Some json -> json
+    in
+    let files_urls =
+      J.member "files" json |> J.to_assoc |>
+      List.map (fun (_, json) ->
+          let filename = json |> J.member "filename" |> J.to_string in
+          let url = json |> J.member "raw_url" |> J.to_string in
+          filename, url
+        )
+    in
+    (* assert (List.sort Stdlib.compare (List.map fst files_urls) = *)
+    (*         List.sort Stdlib.compare (List.map fst gist.files)); *)
+    files_urls
 end

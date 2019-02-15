@@ -29,6 +29,6 @@ end
 
 module Issue : sig
   val migrate:
-    owner:string -> repo:string -> gh_ids:(int -> int) ->
+    string * string -> gh_ids:(int -> int) ->
     Mantis.Issue.t -> ((string * string) list -> Github.Issue.t) * Github.Gist.t option
 end

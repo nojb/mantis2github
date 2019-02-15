@@ -205,7 +205,7 @@ module Issue = struct
   let milestone ~target_version:_ =
     None
 
-  let migrate ~owner ~repo ~gh_ids
+  let migrate (owner, repo) ~gh_ids
       {
         Mantis.Issue.id;
         summary;
