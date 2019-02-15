@@ -206,36 +206,6 @@ module Issue = struct
     json |> J.member "id" |> J.to_int
 end
 
-let total_issue_count ?verbose ?token (owner, repo) =
-  let query =
-    Printf.sprintf {|
-query {
-  repository(owner:"%s", name:"%s") {
-    pullRequests {
-      totalCount
-    }
-    issues {
-      totalCount
-    }
-  }
-}
-    |} owner repo
-  in
-  let data = `Assoc ["query", `String query] in
-  let json =
-    match Api.post ?verbose ?token ~data "/graphql" with
-    | None -> failwith "Could not retrieve total number of issues"
-    | Some json -> json
-  in
-  let json =
-    json
-    |> J.member "data"
-    |> J.member "repository"
-  in
-  let pr_count = json |> J.member "pullRequests" |> J.member "totalCount" |> J.to_int in
-  let issue_count = json |> J.member "issues" |> J.member "totalCount" |> J.to_int in
-  pr_count + issue_count
-
 module Gist = struct
   type t =
     {

@@ -142,15 +142,20 @@ let append_to_log s =
   close_out oc
 
 let read_log () =
-  let log = Hashtbl.create 13 in
-  let ic = open_in "_log" in
-  let rec loop () =
-    match input_line ic with
-    | s -> Scanf.sscanf s "%d %d" (Hashtbl.add log); loop ()
-    | exception End_of_file -> ()
-  in
-  loop ();
-  log
+  if not (Sys.file_exists "_log") then Hashtbl.create 0
+  else begin
+    let log = Hashtbl.create 13 in
+    let ic = open_in "_log" in
+    let rec loop () =
+      match input_line ic with
+      | s -> Scanf.sscanf s "%d %d" (Hashtbl.add log); loop ()
+      | exception End_of_file -> ()
+    in
+    loop ();
+    log
+  end
+
+let existing_number = 0
 
 let import verbose token repo =
   let next_gh_id = Github.total_issue_count ~verbose ?token repo + 1 in
@@ -184,9 +189,9 @@ let import verbose token repo =
       | Pending ->
         loop (2 * sleep)
       | Failed ->
-        failwith "import failed"
+        Printf.ksprintf failwith "Import of #%d failed!" id
       | Imported gh_id' ->
-        Printf.ksprintf append_to_log "%d %d" id gh_id';
+        Printf.ksprintf append_to_log "%-4d %-4d" id gh_id';
         if gh_id <> gh_id' then
           Printf.ksprintf failwith
             "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)" id gh_id gh_id'
