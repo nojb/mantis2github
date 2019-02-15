@@ -158,8 +158,7 @@ let read_log () =
 let existing_number = 0
 
 let import verbose token repo =
-  let next_gh_id = Github.total_issue_count ~verbose ?token repo + 1 in
-  let a = Hashtbl.keys issues |> compute_assignment next_gh_id in
+  let a = Hashtbl.keys issues |> compute_assignment (succ existing_number) in
   let gh_ids = Hashtbl.find (Hashtbl.of_assoc a) in
   let a =
     let log = read_log () in
