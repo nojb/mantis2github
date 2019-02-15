@@ -72,6 +72,8 @@ module Issue : sig
   val check_imported: ?verbose:bool -> ?token:string -> string * string -> int -> res
 end
 
+val total_issue_count: ?verbose:bool -> ?token:string -> string * string -> int
+
 module Gist : sig
   type t =
     {
