@@ -72,43 +72,6 @@ let issues =
   in
   Mantis.Db.use db Mantis.fetch
 
-let gh_user = function
-  | "administrator" -> "bactrian"
-  | "xleroy" -> "xavierleroy"
-  (* | "remy" -> "diremy" *)
-  | "doligez" -> "damiendoligez"
-  | "garrigue" -> "garrigue"
-  | "frisch" -> "alainfrisch"
-  | "weis" -> "pierreweis"
-  (* | "mauny" -> "mauny" *)
-  | "avsm" -> "avsm"
-  | "dra" -> "dra27"
-  (* | "fpottier" -> "fpottier" *)
-  | "maranget" -> "maranget"
-  | "Sebastien_Hinderer"  | "shindere" -> "shindere"
-  | "yallop" -> "yallop"
-  | "chambart" -> "chambart"
-  | "shinwell" -> "mshinwell"
-  | "lefessan" -> "lefessan"
-  (* | "protz" -> "protz" *)
-  | "lpw25" -> "lpw25"
-  | "gasche" -> "gasche"
-  (* | "hongboz" -> "bobzhang" *)
-  (* | "jacques-henri.jourdan" -> "jhjourdan" *)
-  | "def" -> "let-def"
-  | "stedolan" -> "stedolan"
-  | "trefis" -> "trefis"
-  | "damien" -> "damiendoligez"
-  | "nojb" | "nojebar" -> "nojb"
-  | "octachron" -> "Octachron"
-  | "Armael" -> "Armael"
-  | "dim" -> "diml"
-  (* | "guesdon" -> "zoggy" *)
-  | _ -> raise Not_found
-
-let gh_user s =
-  try Some (gh_user s) with Not_found -> None
-
 let extract () =
   let f _ issue =
     let json = Mantis.Issue.to_json issue in
@@ -186,7 +149,7 @@ let get_next verbose {token; owner; repo} =
   | Some n ->
       succ n
 
-let import verbose ({token; owner; repo} as gh) gh_user txt state next =
+let import verbose ({token; owner; repo} as gh) txt state next =
   let n = Hashtbl.length issues in
   let a =
     Hashtbl.fold (fun id _ acc -> id :: acc) issues []
@@ -207,7 +170,7 @@ let import verbose ({token; owner; repo} as gh) gh_user txt state next =
     | [], Start_import -> Ok ()
     | (id, _) :: _, Start_import ->
         let issue = Hashtbl.find issues id in
-        let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
+        let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_ids issue in
         begin match gh_gist with
         | None ->
             f a {finished; pt = Gist_created []}
@@ -223,7 +186,7 @@ let import verbose ({token; owner; repo} as gh) gh_user txt state next =
         assert false
     | (id, _) :: _, Gist_created gist_urls ->
         let issue = Hashtbl.find issues id in
-        let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
+        let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_ids issue in
         begin match Github.Issue.import ~verbose ~token ~owner ~repo (gh_issue gist_urls) with
         | None ->
             Error state
@@ -254,10 +217,10 @@ let import verbose ({token; owner; repo} as gh) gh_user txt state next =
   | Ok () ->
       ()
 
-let import_one verbose {token; owner; repo} gh_user id =
+let import_one verbose {token; owner; repo} id =
   let gh_ids _ = raise Not_found in
   let issue = Hashtbl.find issues id in
-  let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
+  let _, gh_gist = Migrate.Issue.migrate ~owner ~repo ~gh_ids issue in
   let gist_urls =
     match gh_gist with
     | None ->
@@ -271,7 +234,7 @@ let import_one verbose {token; owner; repo} gh_user id =
         end
   in
   let issue = Hashtbl.find issues id in
-  let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_user ~gh_ids issue in
+  let gh_issue, _ = Migrate.Issue.migrate ~owner ~repo ~gh_ids issue in
   let w =
     match Github.Issue.import ~verbose ~token ~owner ~repo (gh_issue gist_urls) with
     | None ->
@@ -290,12 +253,12 @@ let import_one verbose {token; owner; repo} gh_user id =
   in
   loop w
 
-let resume verbose gh_user =
+let resume verbose =
   let gh, state, next = read_state () in
-  import verbose gh gh_user None state next
+  import verbose gh None state next
 
-let import verbose gh gh_user txt =
-  import verbose gh gh_user txt
+let import verbose gh txt =
+  import verbose gh txt
     {finished = 0; pt = Start_import} (get_next verbose gh)
 
 open Cmdliner
@@ -322,18 +285,13 @@ let github_t =
   let github token (owner, repo) = {token; owner; repo} in
   Term.(const github $ token $ repo)
 
-let assignee_t =
-  let doc = "Override assignee." in
-  let f = function None -> gh_user | Some _ as x -> fun _ -> x in
-  Term.(const f $ Arg.(value & opt (some string) None & info ["assignee"] ~doc))
-
 let o_t =
   let doc = "Output assignment." in
   Arg.(value & opt (some string) None & info ["o"] ~doc)
 
 let import_cmd =
   let doc = "Import issues." in
-  Term.(const import $ verbose_t $ github_t $ assignee_t $ o_t),
+  Term.(const import $ verbose_t $ github_t $ o_t),
   Term.info "import" ~doc
 
 let id_t =
@@ -342,12 +300,12 @@ let id_t =
 
 let import_one_cmd =
   let doc = "Import single issues." in
-  Term.(const import_one $ verbose_t $ github_t $ assignee_t $ id_t),
+  Term.(const import_one $ verbose_t $ github_t $ id_t),
   Term.info "import-one" ~doc
 
 let resume_cmd =
   let doc = "Resume issues." in
-  Term.(const resume $ verbose_t $ assignee_t),
+  Term.(const resume $ verbose_t),
   Term.info "resume" ~doc
 
 let default_cmd =

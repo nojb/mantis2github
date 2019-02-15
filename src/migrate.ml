@@ -23,6 +23,43 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
+let mantis2gh = function
+  | "administrator" -> "bactrian"
+  | "xleroy" -> "xavierleroy"
+  (* | "remy" -> "diremy" *)
+  | "doligez" -> "damiendoligez"
+  | "garrigue" -> "garrigue"
+  | "frisch" -> "alainfrisch"
+  | "weis" -> "pierreweis"
+  (* | "mauny" -> "mauny" *)
+  | "avsm" -> "avsm"
+  | "dra" -> "dra27"
+  (* | "fpottier" -> "fpottier" *)
+  | "maranget" -> "maranget"
+  | "Sebastien_Hinderer"  | "shindere" -> "shindere"
+  | "yallop" -> "yallop"
+  | "chambart" -> "chambart"
+  | "shinwell" -> "mshinwell"
+  | "lefessan" -> "lefessan"
+  (* | "protz" -> "protz" *)
+  | "lpw25" -> "lpw25"
+  | "gasche" -> "gasche"
+  (* | "hongboz" -> "bobzhang" *)
+  (* | "jacques-henri.jourdan" -> "jhjourdan" *)
+  | "def" -> "let-def"
+  | "stedolan" -> "stedolan"
+  | "trefis" -> "trefis"
+  | "damien" -> "damiendoligez"
+  | "nojb" | "nojebar" -> "nojb"
+  | "octachron" -> "Octachron"
+  | "Armael" -> "Armael"
+  | "dim" -> "diml"
+  (* | "guesdon" -> "zoggy" *)
+  | _ -> raise Not_found
+
+let mantis2gh s =
+  try Some (mantis2gh s) with Not_found -> None
+
 module Label = struct
   type t =
     | Duplicate
@@ -168,7 +205,7 @@ module Issue = struct
   let milestone ~target_version:_ =
     None
 
-  let migrate ~owner ~repo ~gh_user ~gh_ids
+  let migrate ~owner ~repo ~gh_ids
       {
         Mantis.Issue.id;
         summary;
@@ -225,11 +262,9 @@ module Issue = struct
           if Mantis.Status.is_closed status then Some (timestamp closed_at) else None
     in
     let assignee =
-      match assignee with
-      | Some s ->
-          gh_user s
-      | None ->
-          None
+      match owner, assignee with
+      | "owner", Some s -> mantis2gh s
+      | _ -> None
     in
     let extra_notes urls =
       extra_notes
