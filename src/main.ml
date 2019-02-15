@@ -166,6 +166,7 @@ let import verbose ({token; owner; repo} as gh) txt state next =
     Hashtbl.find h
   in
   let rec f a ({finished; pt} as state) =
+    save_state gh state next;
     match a, pt with
     | [], Start_import -> Ok ()
     | (id, _) :: _, Start_import ->
@@ -212,8 +213,8 @@ let import verbose ({token; owner; repo} as gh) txt state next =
         end
   in
   match f (List.drop state.finished a) state with
-  | Error state ->
-      save_state gh state next
+  | Error _state ->
+      ()
   | Ok () ->
       ()
 
