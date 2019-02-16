@@ -110,7 +110,11 @@ module Issue : sig
       status: Status.t;
       last_status_change: (string option * string) option;
       resolution: Resolution.t;
-      related: int list;
+      duplicate_of: int list;
+      has_duplicate: int list;
+      related_to: int list;
+      child_of: int list;
+      parent_of: int list;
       tags: string list;
       files: (string * string) list;
     }

@@ -146,7 +146,7 @@ module Issue = struct
       ~id ?(reporter = "") ~tags ~category
       ~version ~target_version ~fixed_in_version
       ~status ~priority ~severity ~resolution ~last_status_change
-      ~related
+      ~duplicate_of ~has_duplicate ~related_to ~child_of ~parent_of
     =
     let combine l =
       l
@@ -155,8 +155,8 @@ module Issue = struct
       |> List.map (fun (s1, s2) -> Printf.sprintf "*%s:* %s" s1 s2)
       |> String.concat "\n"
     in
-    let see_also =
-      related
+    let see_also l =
+      l
       |> List.map (pr ~owner ~repo)
       |> String.concat " "
     in
@@ -183,7 +183,11 @@ module Issue = struct
         "Fixed in version", fixed_in_version;
         "Category", category;
         "Tags", String.concat ", " tags;
-        "Related to", see_also;
+        "Duplicate of", see_also duplicate_of;
+        "Has duplicate", see_also has_duplicate;
+        "Related to", see_also related_to;
+        "Child of", see_also child_of;
+        "Parent of", see_also parent_of;
       ]
 
   let extra_notes
@@ -243,20 +247,29 @@ module Issue = struct
         status;
         last_status_change;
         resolution;
-        related;
+        duplicate_of;
+        has_duplicate;
+        related_to;
+        child_of;
+        parent_of;
         tags;
         files;
       }
     =
     let title = if summary = "" then "*no title*" else summary in
     let body =
-      let related = List.map (fun id -> id, gh_ids id) related in
+      let gh id = id, gh_ids id in
+      let duplicate_of = List.map gh duplicate_of in
+      let has_duplicate = List.map gh has_duplicate in
+      let related_to = List.map gh related_to in
+      let child_of = List.map gh child_of in
+      let parent_of = List.map gh parent_of in
       body
         ~owner ~repo
         ~id ?reporter ~tags ~category
         ~version ~target_version ~fixed_in_version
         ~status ~priority ~severity ~resolution ~last_status_change
-        ~related
+        ~duplicate_of ~has_duplicate ~related_to ~child_of ~parent_of
     in
     let labels = labels ~priority ~severity ~category ~status ~resolution in
     let milestone = milestone ~target_version in

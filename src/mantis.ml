@@ -193,7 +193,11 @@ module Issue = struct
       status: Status.t;
       last_status_change: (string option * string) option;
       resolution: Resolution.t;
-      related: int list;
+      duplicate_of: int list;
+      has_duplicate: int list;
+      related_to: int list;
+      child_of: int list;
+      parent_of: int list;
       tags: string list;
       files: (string * string) list;
     }
@@ -223,6 +227,13 @@ module Db = struct
     in
     Mysql.map (Mysql.exec dbd query) ~f |> Hashtbl.of_list
 end
+
+type rel =
+  | Duplicate_of
+  | Has_duplicate
+  | Child_of
+  | Parent_of
+  | Related_to
 
 let fetch dbd =
   let categories =
@@ -301,18 +312,36 @@ let fetch dbd =
   in
   let relationships =
     let f = function
-      | [|source_bug_id; destination_bug_id|] ->
-          int_of_string source_bug_id, int_of_string destination_bug_id
+      | [|source_bug_id; destination_bug_id; relationship_type|] ->
+          let kind =
+            match int_of_string relationship_type with
+            | 0 -> `Duplicate_of
+            | 1 -> `Related_to
+            | 2 -> `Parent_of
+            | n -> Printf.ksprintf failwith "Unexpected relationship_type: %d" n
+          in
+          int_of_string source_bug_id, (kind, int_of_string destination_bug_id)
       | _ ->
           assert false
     in
     let h =
       Db.exec dbd f
-        "SELECT source_bug_id, destination_bug_id \
+        "SELECT source_bug_id, destination_bug_id, relationship_type \
          FROM mantis_bug_relationship_table;"
     in
     let h' = Hashtbl.create (Hashtbl.length h) in
-    Hashtbl.iter (fun id x -> Hashtbl.add h' id x; Hashtbl.add h' x id) h;
+    Hashtbl.iter (fun source_id (kind, dest_id) ->
+        match kind with
+        | `Duplicate_of ->
+            Hashtbl.add h' source_id (Duplicate_of, dest_id);
+            Hashtbl.add h' dest_id (Has_duplicate, source_id)
+        | `Related_to ->
+            Hashtbl.add h' source_id (Related_to, dest_id);
+            Hashtbl.add h' dest_id (Related_to, source_id)
+        | `Parent_of ->
+            Hashtbl.add h' source_id (Parent_of, dest_id);
+            Hashtbl.add h' dest_id (Child_of, source_id)
+      ) h;
     h'
   in
   let tags =
@@ -354,17 +383,30 @@ let fetch dbd =
         let status = Status.of_int (int_of_string status) in
         let last_status_change = Hashtbl.find_opt history id in
         let resolution = Resolution.of_int (int_of_string resolution) in
-        let related = List.sort Stdlib.compare (Hashtbl.find_all relationships id) in
         let tags = Hashtbl.find_all tags id in
         let priority = Priority.of_int (int_of_string priority) in
         let severity = Severity.of_int (int_of_string severity) in
         let files = Hashtbl.find_all files id in
+        let get_rel k =
+          let rec loop = function
+            | [] -> []
+            | (k1, x) :: xs ->
+                if k = k1 then x :: loop xs else loop xs
+          in
+          Hashtbl.find_all relationships id |> loop |> List.sort Stdlib.compare
+        in
+        let duplicate_of = get_rel Duplicate_of in
+        let has_duplicate = get_rel Has_duplicate in
+        let related_to = get_rel Related_to in
+        let child_of = get_rel Child_of in
+        let parent_of = get_rel Parent_of in
         id,
         { Issue.id; summary; priority; severity; category;
           date_submitted; last_updated; reporter; handler;
           description; steps_to_reproduce; additional_information;
           version; target_version; fixed_in_version;
-          notes; status; last_status_change; resolution; related; tags; files }
+          notes; status; last_status_change; resolution; duplicate_of;
+          has_duplicate; related_to; child_of; parent_of; tags; files }
     | _ ->
         assert false
   in
