@@ -152,7 +152,7 @@ module Issue = struct
       l
       |> List.map (fun (s1, s2) -> s1, String.trim s2)
       |> List.filter (function (_, "") -> false | _ -> true)
-      |> List.map (fun (s1, s2) -> Printf.sprintf "*%s:* %s" s1 s2)
+      |> List.map (fun (s1, s2) -> Printf.sprintf "%s: %s" s1 s2)
       |> String.concat "\n"
     in
     let see_also l =
@@ -162,7 +162,8 @@ module Issue = struct
     in
     let status =
       match last_status_change with
-      | None -> Mantis.Status.to_string status
+      | None ->
+          Mantis.Status.to_string status
       | Some (Some s1, s2) ->
           Printf.sprintf "%s (by %s on %s)"
             (Mantis.Status.to_string status) s1 (timestamp s2)
@@ -172,7 +173,7 @@ module Issue = struct
     in
     combine
       [
-        "Mantis ID", string_of_int id;
+        "Original bug ID", Printf.sprintf "PR#%d" id;
         "Reporter", reporter;
         "Status", status;
         "Resolution", Mantis.Resolution.to_string resolution;
