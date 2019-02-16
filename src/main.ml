@@ -84,12 +84,20 @@ let issues =
   in
   Mantis.Db.use db Mantis.fetch
 
-let extract () =
-  let f _ issue =
-    let json = Mantis.Issue.to_json issue in
+let extract ids =
+  let gh_ids id = id in
+  let f id =
+    let issue = Hashtbl.find issues id in
+    let issue, gist = Migrate.Issue.migrate ("ocaml", "ocaml") ~gh_ids issue in
+    let urls =
+      match gist with
+      | None -> []
+      | Some {Github.Gist.files; _} -> files
+    in
+    let json = Github.Issue.to_json (issue urls) in
     Printf.printf "%a\n" (Yojson.Basic.pretty_to_channel ~std:true) json
   in
-  Hashtbl.iter f issues
+  List.iter f ids
 
 let compute_assignment next l =
   let module S = Set.Make (struct type t = int let compare = Stdlib.compare end) in
@@ -207,7 +215,8 @@ let verbose_t =
 
 let extract_cmd =
   let doc = "Extract Mantis into JSON" in
-  Term.(const extract $ const ()), Term.info "extract" ~doc
+  Term.(const extract $ Arg.(value & pos_all int [] & info [] ~docv:"ID")),
+  Term.info "extract" ~doc
 
 let token_t =
   let doc = "Github token." in

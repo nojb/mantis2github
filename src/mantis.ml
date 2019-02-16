@@ -31,11 +31,6 @@ module Hashtbl = struct
     h
 end
 
-let str s1 s2 l =
-  match s2 with
-  | None -> l
-  | Some s2 -> (s1, `String s2) :: l
-
 module Priority = struct
   type t =
     | None
@@ -61,9 +56,6 @@ module Priority = struct
     | High -> "high"
     | Urgent -> "urgent"
     | Immediate -> "immediate"
-
-  let to_json x =
-    `String (to_string x)
 end
 
 module Severity = struct
@@ -97,9 +89,6 @@ module Severity = struct
     | Major -> "major"
     | Crash -> "crash"
     | Block -> "block"
-
-  let to_json x =
-    `String (to_string x)
 end
 
 module Resolution = struct
@@ -136,9 +125,6 @@ module Resolution = struct
     | Not_a_bug -> "not a bug"
     | Suspended -> "suspended"
     | Wont_fix -> "won't fix"
-
-  let to_json x =
-    `String (to_string x)
 end
 
 module Status = struct
@@ -173,9 +159,6 @@ module Status = struct
   let is_closed = function
     | Resolved | Closed -> true
     | _ -> false
-
-  let to_json st =
-    `String (to_string st)
 end
 
 module Note = struct
@@ -186,13 +169,6 @@ module Note = struct
       last_modified: string;
       date_submitted: string;
     }
-
-  let to_json {reporter; text; last_modified; date_submitted} =
-    let l = ("date_submitted", `String date_submitted) :: [] in
-    let l = ("last_modified", `String last_modified) :: l in
-    let l = ("text", `String text) :: l in
-    let l = str "reporter" reporter l in
-    `Assoc l
 end
 
 module Issue = struct
@@ -215,68 +191,12 @@ module Issue = struct
       fixed_in_version: string;
       notes: Note.t list;
       status: Status.t;
-      history: (string * Status.t) option;
+      last_status_change: (string option * string) option;
       resolution: Resolution.t;
       related: int list;
       tags: string list;
       files: (string * string) list;
     }
-
-  let to_json
-      {
-        id;
-        summary;
-        priority;
-        severity;
-        category;
-        date_submitted;
-        last_updated;
-        reporter;
-        handler;
-        description;
-        steps_to_reproduce;
-        additional_information;
-        version;
-        target_version;
-        fixed_in_version;
-        notes;
-        status;
-        history;
-        resolution;
-        related;
-        tags;
-        files;
-      }
-    =
-    let l = [] in
-    let l = ("files", `List (List.map (fun (s, _) -> `String s) files)) :: l in
-    let l = ("tags", `List (List.map (fun s -> `String s) tags)) :: l in
-    let l = ("related", `List (List.map (fun n -> `Int n) related)) :: l in
-    let l = ("resolution", Resolution.to_json resolution) :: l in
-    let l =
-      match history with
-      | None -> l
-      | Some (at, st) ->
-          ("history", `List [`String at; Status.to_json st]) :: l
-    in
-    let l = ("status", Status.to_json status) :: l in
-    let l = ("notes", `List (List.map Note.to_json notes)) :: l in
-    let l = ("fixed_in_version", `String fixed_in_version) :: l in
-    let l = ("target_version", `String target_version) :: l in
-    let l = ("version", `String version) :: l in
-    let l = ("additional_information", `String additional_information) :: l in
-    let l = ("steps_to_reproduce", `String steps_to_reproduce) :: l in
-    let l = ("description", `String description) :: l in
-    let l = str "handler" handler l in
-    let l = str "reporter" reporter l in
-    let l = ("last_updated", `String last_updated) :: l in
-    let l = ("date_submitted", `String date_submitted) :: l in
-    let l = ("category", `String category) :: l in
-    let l = ("severity", Severity.to_json severity) :: l in
-    let l = ("priority", Priority.to_json priority) :: l in
-    let l = ("summary", `String summary) :: l in
-    let l = ("id", `Int id) :: l in
-    `Assoc l
 end
 
 module Db = struct
@@ -358,14 +278,14 @@ let fetch dbd =
   in
   let history =
     let f = function
-      | [|bug_id; date_modified; new_value|] ->
-          int_of_string bug_id,
-          (date_modified, Status.of_int (int_of_string new_value))
+      | [|bug_id; user_id; date_modified|] ->
+          let user = Hashtbl.find_opt users (int_of_string user_id) in
+          int_of_string bug_id, (user, date_modified)
       | _ ->
           assert false
     in
     Db.exec dbd f
-      "SELECT bug_id, date_modified, new_value FROM mantis_bug_history_table \
+      "SELECT bug_id, user_id, date_modified FROM mantis_bug_history_table \
        WHERE field_name = 'status' ORDER BY date_modified ASC;"
   in
   let files =
@@ -432,7 +352,7 @@ let fetch dbd =
         in
         let notes = Hashtbl.find_all notes id in
         let status = Status.of_int (int_of_string status) in
-        let history = Hashtbl.find_opt history id in
+        let last_status_change = Hashtbl.find_opt history id in
         let resolution = Resolution.of_int (int_of_string resolution) in
         let related = List.sort Stdlib.compare (Hashtbl.find_all relationships id) in
         let tags = Hashtbl.find_all tags id in
@@ -444,7 +364,7 @@ let fetch dbd =
           date_submitted; last_updated; reporter; handler;
           description; steps_to_reproduce; additional_information;
           version; target_version; fixed_in_version;
-          notes; status; history; resolution; related; tags; files }
+          notes; status; last_status_change; resolution; related; tags; files }
     | _ ->
         assert false
   in

@@ -145,7 +145,8 @@ module Issue = struct
       ~owner ~repo
       ~id ?(reporter = "") ~tags ~category
       ~version ~target_version ~fixed_in_version
-      ~status ~priority ~severity ~resolution ~related
+      ~status ~priority ~severity ~resolution ~last_status_change
+      ~related
     =
     let combine l =
       l
@@ -159,11 +160,21 @@ module Issue = struct
       |> List.map (pr ~owner ~repo)
       |> String.concat " "
     in
+    let status =
+      match last_status_change with
+      | None -> Mantis.Status.to_string status
+      | Some (Some s1, s2) ->
+          Printf.sprintf "%s (by %s on %s)"
+            (Mantis.Status.to_string status) s1 (timestamp s2)
+      | Some (None, s) ->
+          Printf.sprintf "%s (on %s)"
+            (Mantis.Status.to_string status) (timestamp s)
+    in
     combine
       [
         "Mantis ID", string_of_int id;
         "Reporter", reporter;
-        "Status", Mantis.Status.to_string status;
+        "Status", status;
         "Resolution", Mantis.Resolution.to_string resolution;
         "Priority", Mantis.Priority.to_string priority;
         "Severity", Mantis.Severity.to_string severity;
@@ -230,7 +241,7 @@ module Issue = struct
         fixed_in_version;
         notes;
         status;
-        history;
+        last_status_change;
         resolution;
         related;
         tags;
@@ -244,7 +255,8 @@ module Issue = struct
         ~owner ~repo
         ~id ?reporter ~tags ~category
         ~version ~target_version ~fixed_in_version
-        ~status ~priority ~severity ~resolution ~related
+        ~status ~priority ~severity ~resolution ~last_status_change
+        ~related
     in
     let labels = labels ~priority ~severity ~category ~status ~resolution in
     let milestone = milestone ~target_version in
@@ -252,11 +264,9 @@ module Issue = struct
     let updated_at = timestamp last_updated in
     let created_at = timestamp date_submitted in
     let closed_at =
-      match history with
+      match last_status_change with
       | None -> if closed then Some updated_at else None
-      | Some (closed_at, st) ->
-          assert (st = status);
-          if Mantis.Status.is_closed status then Some (timestamp closed_at) else None
+      | Some (_, s) -> if Mantis.Status.is_closed status then Some (timestamp s) else None
     in
     let assignee =
       match owner, assignee with

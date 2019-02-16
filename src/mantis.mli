@@ -86,8 +86,6 @@ module Note : sig
       last_modified: string;
       date_submitted: string;
     }
-
-  val to_json: t -> Yojson.Basic.t
 end
 
 module Issue : sig
@@ -110,14 +108,12 @@ module Issue : sig
       fixed_in_version: string;
       notes: Note.t list;
       status: Status.t;
-      history: (string * Status.t) option;
+      last_status_change: (string option * string) option;
       resolution: Resolution.t;
       related: int list;
       tags: string list;
       files: (string * string) list;
     }
-
-  val to_json: t -> Yojson.Basic.t
 end
 
 module Db : sig

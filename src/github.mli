@@ -63,6 +63,8 @@ module Issue : sig
       comments: Comment.t list;
     }
 
+  val to_json: t -> Yojson.Basic.t
+
   type res =
     | Imported of int
     | Failed
