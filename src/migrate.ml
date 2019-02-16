@@ -145,7 +145,7 @@ module Issue = struct
       ~owner ~repo
       ~id ?(reporter = "") ~tags ~category
       ~version ~target_version ~fixed_in_version
-      ~priority ~severity ~related
+      ~status ~priority ~severity ~resolution ~related
     =
     let combine l =
       l
@@ -163,12 +163,14 @@ module Issue = struct
       [
         "Mantis ID", string_of_int id;
         "Reporter", reporter;
+        "Status", Mantis.Status.to_string status;
+        "Resolution", Mantis.Resolution.to_string resolution;
+        "Priority", Mantis.Priority.to_string priority;
+        "Severity", Mantis.Severity.to_string severity;
         "Version", version;
         "Target version", target_version;
         "Fixed in version", fixed_in_version;
         "Category", category;
-        "Priority", Mantis.Priority.to_string priority;
-        "Severity", Mantis.Severity.to_string severity;
         "Tags", String.concat ", " tags;
         "Related to", see_also;
       ]
@@ -237,22 +239,12 @@ module Issue = struct
     =
     let title = if summary = "" then "*no title*" else summary in
     let body =
-      let related =
-        List.filter (fun id' ->
-            match gh_ids id' with
-            | _ ->
-                true
-            | exception Not_found ->
-                Printf.eprintf "WARNING: related issue %d to %d not found\n%!" id' id;
-                false
-          ) related
-        |> List.map (fun id -> id, gh_ids id)
-      in
+      let related = List.map (fun id -> id, gh_ids id) related in
       body
         ~owner ~repo
         ~id ?reporter ~tags ~category
         ~version ~target_version ~fixed_in_version
-        ~priority ~severity ~related
+        ~status ~priority ~severity ~resolution ~related
     in
     let labels = labels ~priority ~severity ~category ~status ~resolution in
     let milestone = milestone ~target_version in
