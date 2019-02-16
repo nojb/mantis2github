@@ -239,7 +239,7 @@ module Gist = struct
         let oc = open_out_bin (Filename.concat dir name) in
         output_string oc content;
         close_out oc;
-        Printf.ksprintf exec "git -C %s add %s" dir name
+        Printf.ksprintf exec "git -C %s add '%s'" dir name
       ) files;
     Printf.ksprintf exec "git -C %s commit --amend --allow-empty-message --no-edit" dir;
     Printf.ksprintf exec "git -C %s push -f" dir
