@@ -138,7 +138,11 @@ module Note = struct
 end
 
 module Issue = struct
+  let pr ~owner ~repo (id, gh_id) =
+    Printf.sprintf "[PR#%d](%s/%s#%d)" id owner repo gh_id
+
   let body
+      ~owner ~repo
       ~id ?(reporter = "") ~tags ~category
       ~version ~target_version ~fixed_in_version
       ~priority ~severity ~related
@@ -152,7 +156,7 @@ module Issue = struct
     in
     let see_also =
       related
-      |> List.map (fun (_, gh_id) -> Printf.sprintf "#%d" gh_id)
+      |> List.map (pr ~owner ~repo)
       |> String.concat " "
     in
     combine
@@ -245,6 +249,7 @@ module Issue = struct
         |> List.map (fun id -> id, gh_ids id)
       in
       body
+        ~owner ~repo
         ~id ?reporter ~tags ~category
         ~version ~target_version ~fixed_in_version
         ~priority ~severity ~related
