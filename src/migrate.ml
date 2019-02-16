@@ -64,55 +64,55 @@ module Label = struct
   type t =
     | Duplicate
     | No_change_required
-    | Unable_to_reproduce
     | Wontfix
-    | Critical
     | High_priority
-    | Low_priority
     | Suspended
-    | Feature
-    | Tweak
-    | Crash
-    | Block
 
   let to_string = function
     | Duplicate -> "duplicate"
     | No_change_required -> "no change required"
-    | Unable_to_reproduce -> "unable to reproduce"
     | Wontfix -> "wontfix"
-    | Critical -> "critical"
     | High_priority -> "high priority"
-    | Low_priority -> "low priority"
     | Suspended -> "suspended"
-    | Feature -> "feature"
-    | Tweak -> "tweak"
-    | Crash -> "crash"
-    | Block -> "block"
 
   module L = struct
     type nonrec _t = t list
 
     let of_priority = function
-      | Mantis.Priority.None | Normal -> []
-      | Low -> [Low_priority]
-      | High | Urgent -> [High_priority]
-      | Immediate -> [Critical]
+      | Mantis.Priority.None | Normal | Low -> []
+      | High | Urgent | Immediate -> [High_priority]
 
     let of_severity = function
-      | Mantis.Severity.Feature -> [Feature]
-      | Tweak | Trivial | Minor -> [Tweak]
-      | Text | Major -> []
-      | Crash -> [Crash]
-      | Block -> [Block]
+      | Mantis.Severity.Feature | Tweak | Trivial | Minor -> []
+      | Text | Major | Crash | Block -> []
 
     let of_resolution = function
-      | Mantis.Resolution.Open | Fixed | Reopened -> []
-      | Unable_to_duplicate -> [Unable_to_reproduce]
+      | Mantis.Resolution.Open | Fixed | Reopened
+      | Unable_to_duplicate -> []
       | Duplicate -> [Duplicate]
       | Not_a_bug -> [No_change_required]
       | Suspended -> [Suspended]
       | Wont_fix -> [Wontfix]
       | Not_fixable -> []
+
+    (* let of_category = function *)
+    (*   | "documentation" -> [Documentation] *)
+    (*   | "ocamldoc" -> [Ocamldoc] *)
+    (*   | "typing" -> [Typing] *)
+    (*   | "back end (clambda to assembly)" -> [Backend] *)
+    (*   | "windows, cross compilation, etc" [Windows_cross_compilation] *)
+    (*   | "runtime system and C interface" -> [Runtime] *)
+    (*   | "standard library" -> [Stdlib] *)
+    (*   | "otherlibs" -> [Otherlibs] *)
+    (*   | "toplevel" -> [Toplevel] *)
+    (*   | "language features" -> [Language_features] *)
+    (*   | "compiler driver" -> [Compiler_driver] *)
+    (*   | "lexing and parsing" -> [Lexing_parsing] *)
+    (*   | "middle end (typedtree to clambda)" -> [Middleend] *)
+    (*   | "threads" -> [Threads] *)
+    (*   | "dynlink and natdynlink" -> [Dynlink] *)
+    (*   | "emacs mode" -> [Emacs] *)
+    (*   | _ -> [] *)
   end
 end
 
@@ -219,10 +219,9 @@ module Issue = struct
             (note "File attachments" file_attachments [])))
 
   let labels ~priority ~severity ~category:_ ~status:_ ~resolution =
-    if true then [] else
-      Label.L.(of_priority priority @ of_severity severity @ of_resolution resolution)
-      |> List.sort_uniq Stdlib.compare
-      |> List.map Label.to_string
+    Label.L.(of_priority priority @ of_severity severity @ of_resolution resolution)
+    |> List.sort_uniq Stdlib.compare
+    |> List.map Label.to_string
 
   let milestone ~target_version:_ =
     None
