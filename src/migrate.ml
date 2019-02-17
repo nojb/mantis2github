@@ -72,7 +72,7 @@ module Label = struct
     | Duplicate -> "duplicate"
     | No_change_required -> "no change required"
     | Wontfix -> "wontfix"
-    | High_priority -> "high priority"
+    | High_priority -> "high-priority"
     | Suspended -> "suspended"
 
   module L = struct
