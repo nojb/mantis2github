@@ -193,7 +193,7 @@ module Note = struct
       let reporter =
         match reporter with
         | None -> ""
-        | Some s -> Printf.sprintf "*Comment author:* %s\n" s
+        | Some s -> Printf.sprintf "**Comment author:** %s\n" s
       in
       let text = String.trim text in
       if text <> "" then reporter ^ "\n" ^ text else reporter
