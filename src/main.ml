@@ -135,13 +135,6 @@ let () =
   t 1 [3; 5] [(3, 1); (5, 2)];
   t 3 [5; 3] [(3, 3); (5, 4)]
 
-(* let get_next verbose {token; owner; repo} = *)
-(*   match Github.Issue.count ~verbose ~token ~owner ~repo () with *)
-(*   | None -> *)
-(*       failwith "Could not count issues, cannot proceed!" *)
-(*   | Some n -> *)
-(*       succ n *)
-
 let append_to_log s =
   let fd = Unix.openfile "_log" [O_WRONLY; O_APPEND; O_CREAT] 0o644 in
   let oc = Unix.out_channel_of_descr fd in
