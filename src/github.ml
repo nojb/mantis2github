@@ -196,6 +196,11 @@ module Issue = struct
     let data = to_json issue in
     let json = Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo in
     json |> J.member "id" |> J.to_int
+
+  let exists ?verbose ?token (owner, repo) id =
+    match Api.get ?verbose ?token "/repos/%s/%s/issues/%d" owner repo id with
+    | exception _ -> false
+    | _ -> true
 end
 
 module Gist = struct

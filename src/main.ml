@@ -121,13 +121,14 @@ let () =
   t 1 [3; 5] [(3, 1); (5, 2)];
   t 3 [5; 3] [(3, 3); (5, 4)]
 
-let append_to_log s =
+let append_to_log (id, gh_id) =
+  let s = Printf.ksprintf append_to_log "%-4d %-4d" id gh_id' in
   let fd = Unix.openfile "_log" [O_WRONLY; O_APPEND; O_CREAT] 0o644 in
   let oc = Unix.out_channel_of_descr fd in
   output_string oc s;
   output_char oc '\n';
   close_out oc;
-  prerr_endline s
+  print_endline s
 
 let read_log () =
   if not (Sys.file_exists "_log") then
@@ -162,6 +163,17 @@ let import verbose token repo =
             false
       ) a
   in
+  let a =
+    match a with
+    | [] -> []
+    | (id, gh_id) :: a ->
+      if Github.Issue.exists ~verbose ?token repo gh_id then begin
+        Printf.eprintf "PR#%d [#%d] already exists, skipping\n%!" id gh_id;
+        append_to_log (id, gh_id);
+        a
+      else
+        a
+  in
   let f (id, gh_id) =
     let issue = Hashtbl.find issues id in
     let gh_issue, gist = Migrate.Issue.migrate repo ~gh_ids issue in
@@ -179,7 +191,7 @@ let import verbose token repo =
       | Failed ->
         Printf.ksprintf failwith "Import of #%d failed!" id
       | Imported gh_id' ->
-        Printf.ksprintf append_to_log "%-4d %-4d" id gh_id';
+        append_to_log (id, gh_id');
         if gh_id <> gh_id' then
           Printf.ksprintf failwith
             "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)" id gh_id gh_id'
