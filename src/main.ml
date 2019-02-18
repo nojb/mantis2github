@@ -191,15 +191,15 @@ let import verbose token repo =
       end else begin
         match Github.Gist.last ~verbose ?token () with
         | None -> a0
-        | Some (description, raw_urls) ->
-          if string_of_int id <> (String.split_on_char '/' description |> List.rev |> List.hd) then
+        | Some (description, gist_id) ->
+            if string_of_int id =
+               (String.split_on_char '/' description |> List.rev |> List.hd)
+            then begin
+              Printf.eprintf "Stale gist %s for PR#%d [#%d] found, removing\n%!"
+                gist_id id gh_id;
+              Github.Gist.delete ~verbose ?token gist_id
+            end;
             a0
-          else begin
-            let gh_issue, _ = Migrate.Issue.migrate repo ~gh_ids (Hashtbl.find issues id) in
-            do_import id gh_id (gh_issue raw_urls);
-            Printf.eprintf "Gist for PR#%d [#%d] found, retrying issue import" id gh_id;
-            a
-          end
       end
   in
   let f (id, gh_id) =

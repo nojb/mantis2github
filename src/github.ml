@@ -29,10 +29,12 @@ module Api = struct
   type t =
     | POST
     | GET
+    | DELETE
 
   let to_string = function
     | GET -> "GET"
     | POST -> "POST"
+    | DELETE -> "DELETE"
 
   let root = "https://api.github.com"
 
@@ -98,6 +100,9 @@ module Api = struct
 
   let post ?verbose ?headers ?data ?token fmt =
     Printf.ksprintf (curl POST ?verbose ?headers ?data ?token) fmt
+
+  let delete ?verbose ?headers ?token fmt =
+    Printf.ksprintf (fun s -> ignore (curl DELETE ?verbose ?headers ?token s)) fmt
 end
 
 module Labels = struct
@@ -282,15 +287,10 @@ module Gist = struct
     match J.to_list json with
     | [] -> None
     | x :: _ ->
-      let description = J.member "description" x |> J.to_string in
-      let files =
-        J.member "files" x
-        |> J.to_assoc
-        |> List.map (fun (_, json) ->
-            let filename = json |> J.member "filename" |> J.to_string in
-            let raw_url = json |> J.member "raw_url" |> J.to_string in
-            filename, raw_url
-          )
-      in
-      Some (description, files)
+        let description = J.member "description" x |> J.to_string in
+        let gist_id = J.member "id" x |> J.to_string in
+        Some (description, gist_id)
+
+  let delete ?verbose ?token gist_id =
+    Api.delete ?verbose ?token "/gists/%s" gist_id
 end
