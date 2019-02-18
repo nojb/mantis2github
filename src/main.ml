@@ -214,6 +214,27 @@ let import verbose token repo =
   in
   List.iter f a
 
+let check verbose token repo =
+  let all_labels =
+    let gh_ids id = id in
+    Hashtbl.fold (fun _ issue acc ->
+        let gh_issue, gh_gist = Migrate.Issue.migrate repo ~gh_ids issue in
+        let raw_urls =
+          match gh_gist with
+          | None -> []
+          | Some {Github.Gist.files; _} -> files
+        in
+        let gh_issue = gh_issue raw_urls in
+        List.rev_append gh_issue.Github.Issue.issue.Github.Issue.Issue.labels acc
+      ) issues []
+    |> List.sort_uniq Stdlib.compare
+  in
+  let gh_labels = Github.Labels.list ~verbose ?token repo in
+  List.iter (fun lab ->
+      if not (List.mem lab gh_labels) then
+        Printf.printf "Missing label: %S\n%!" lab
+    ) all_labels
+
 open Cmdliner
 
 let verbose_t =
@@ -238,6 +259,11 @@ let import_cmd =
   Term.(const import $ verbose_t $ token_t $ repo_t),
   Term.info "import" ~doc
 
+let check_cmd =
+  let doc = "Check." in
+  Term.(const check $ verbose_t $ token_t $ repo_t),
+  Term.info "check" ~doc
+
 let default_cmd =
   let doc = "a Mantis => Github migration tool" in
   Term.(ret (const (`Help (`Pager, None)))),
@@ -247,6 +273,7 @@ let cmds =
   [
     extract_cmd;
     import_cmd;
+    check_cmd;
   ]
 
 let () =

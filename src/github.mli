@@ -33,6 +33,10 @@ module Api : sig
     ?token:string -> ('a, unit, string, Yojson.Basic.t) format4 -> 'a
 end
 
+module Labels : sig
+  val list: ?verbose:bool -> ?token:string -> string * string -> string list
+end
+
 module Issue : sig
   module Issue : sig
     type t =
