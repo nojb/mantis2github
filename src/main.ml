@@ -122,7 +122,7 @@ let () =
   t 3 [5; 3] [(3, 3); (5, 4)]
 
 let append_to_log (id, gh_id) =
-  let s = Printf.ksprintf append_to_log "%-4d %-4d" id gh_id' in
+  let s = Printf.sprintf "%-4d %-4d" id gh_id in
   let fd = Unix.openfile "_log" [O_WRONLY; O_APPEND; O_CREAT] 0o644 in
   let oc = Unix.out_channel_of_descr fd in
   output_string oc s;
@@ -163,26 +163,8 @@ let import verbose token repo =
             false
       ) a
   in
-  let a =
-    match a with
-    | [] -> []
-    | (id, gh_id) :: a ->
-      if Github.Issue.exists ~verbose ?token repo gh_id then begin
-        Printf.eprintf "PR#%d [#%d] already exists, skipping\n%!" id gh_id;
-        append_to_log (id, gh_id);
-        a
-      else
-        a
-  in
-  let f (id, gh_id) =
-    let issue = Hashtbl.find issues id in
-    let gh_issue, gist = Migrate.Issue.migrate repo ~gh_ids issue in
-    let gist_urls =
-      match gist with
-      | None -> []
-      | Some gist -> Github.Gist.create ~verbose ?token gist
-    in
-    let iid = Github.Issue.import ~verbose ?token repo (gh_issue gist_urls) in
+  let do_import id gh_id gh_issue =
+    let iid = Github.Issue.import ~verbose ?token repo gh_issue in
     let rec loop sleep =
       Unix.sleep sleep;
       match Github.Issue.check_imported ~verbose ?token repo iid with
@@ -197,6 +179,38 @@ let import verbose token repo =
             "Github ID mismatch! (id=%d,gh_id=%d,gh_id'=%d)" id gh_id gh_id'
     in
     loop 1
+  in
+  let a =
+    match a with
+    | [] -> []
+    | (id, gh_id) :: a as a0 ->
+      if Github.Issue.exists ~verbose ?token repo gh_id then begin
+        Printf.eprintf "PR#%d [#%d] already exists, skipping\n%!" id gh_id;
+        append_to_log (id, gh_id);
+        a
+      end else begin
+        match Github.Gist.last ~verbose ?token () with
+        | None -> a0
+        | Some (description, raw_urls) ->
+          if string_of_int id <> (String.split_on_char '/' description |> List.rev |> List.hd) then
+            a0
+          else begin
+            let gh_issue, _ = Migrate.Issue.migrate repo ~gh_ids (Hashtbl.find issues id) in
+            do_import id gh_id (gh_issue raw_urls);
+            Printf.eprintf "Gist for PR#%d [#%d] found, retrying issue import" id gh_id;
+            a
+          end
+      end
+  in
+  let f (id, gh_id) =
+    let issue = Hashtbl.find issues id in
+    let gh_issue, gist = Migrate.Issue.migrate repo ~gh_ids issue in
+    let raw_urls =
+      match gist with
+      | None -> []
+      | Some gist -> Github.Gist.create ~verbose ?token gist
+    in
+    do_import id gh_id (gh_issue raw_urls);
   in
   List.iter f a
 

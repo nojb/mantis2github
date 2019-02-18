@@ -267,4 +267,21 @@ module Gist = struct
     (* assert (List.sort Stdlib.compare (List.map fst files_urls) = *)
     (*         List.sort Stdlib.compare (List.map fst gist.files)); *)
     files_urls
+
+  let last ?verbose ?token () =
+    let json = Api.get ?verbose ?token "/gists" in
+    match J.to_list json with
+    | [] -> None
+    | x :: _ ->
+      let description = J.member "description" x |> J.to_string in
+      let files =
+        J.member "files" x
+        |> J.to_assoc
+        |> List.map (fun (_, json) ->
+            let filename = json |> J.member "filename" |> J.to_string in
+            let raw_url = json |> J.member "raw_url" |> J.to_string in
+            filename, raw_url
+          )
+      in
+      Some (description, files)
 end

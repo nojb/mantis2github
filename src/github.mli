@@ -84,5 +84,5 @@ module Gist : sig
     }
 
   val create: ?verbose:bool -> ?token:string -> t -> (string * string) list
-  (* val list: ?verbose:bool -> ?token:string -> unit -> string list *)
+  val last: ?verbose:bool -> ?token:string -> unit -> (string * (string * string) list) option
 end
