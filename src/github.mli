@@ -23,16 +23,6 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
-module Api : sig
-  val get:
-    ?verbose:bool -> ?headers:(string * string) list -> ?params:(string * string) list ->
-    ?token:string -> ('a, unit, string, Yojson.Basic.t) format4 -> 'a
-
-  val post:
-    ?verbose: bool -> ?headers:(string * string) list -> ?data:Yojson.Basic.t ->
-    ?token:string -> ('a, unit, string, Yojson.Basic.t) format4 -> 'a
-end
-
 module Labels : sig
   val list: ?verbose:bool -> ?token:string -> string * string -> string list
 end
