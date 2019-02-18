@@ -26,11 +26,11 @@
 module Api : sig
   val get:
     ?verbose:bool -> ?headers:(string * string) list -> ?params:(string * string) list ->
-    ?token:string -> ('a, unit, string, Yojson.Basic.t option) format4 -> 'a
+    ?token:string -> ('a, unit, string, Yojson.Basic.t) format4 -> 'a
 
   val post:
     ?verbose: bool -> ?headers:(string * string) list -> ?data:Yojson.Basic.t ->
-    ?token:string -> ('a, unit, string, Yojson.Basic.t option) format4 -> 'a
+    ?token:string -> ('a, unit, string, Yojson.Basic.t) format4 -> 'a
 end
 
 module Issue : sig

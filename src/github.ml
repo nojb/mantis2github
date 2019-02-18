@@ -43,6 +43,7 @@ module Api = struct
       | None -> headers
     in
     let headers = ("Accept", "application/vnd.github.golden-comet-preview+json") :: headers in
+    let tmp = Filename.temp_file "curl" "out" in
     let cmd =
       let headers =
         match headers with
@@ -67,13 +68,12 @@ module Api = struct
         | l -> "?" ^ String.concat "&" (List.map (fun (k, v) -> String.concat "=" [k; v]) l)
       in
       let verbose = if false && verbose then "--verbose " else "" in
-      Printf.sprintf "curl -L -w '%%{http_code}\\n' -Ss %s%s%s-X %s '%s%s%s'"
-        verbose data headers (to_string meth) root route params
+      Printf.sprintf "curl -L -w '%%{http_code}\\n' -Ss %s%s%s-X %s '%s%s%s' -o %s"
+        verbose data headers (to_string meth) root route params tmp
     in
     if verbose then Printf.eprintf "+ %s\n%!" cmd;
-    let tmp = Filename.temp_file "curl" "out" in
     let tmp_http_code = Filename.temp_file "curl" "code" in
-    match Sys.command (Printf.sprintf "%s -o %s > %s" cmd tmp tmp_http_code) with
+    match Sys.command (Printf.sprintf "%s > %s" cmd tmp_http_code) with
     | 0 ->
         let ic = open_in tmp_http_code in
         let code = input_line ic |> int_of_string in
@@ -87,11 +87,11 @@ module Api = struct
           let json = match data with None -> json | Some data -> ("data", data) :: json in
           let json = `Assoc json in
           Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-          None
-        end else
-          Some json
+          Printf.ksprintf failwith "Github API call failed: %s" route
+        end;
+        json
     | _ ->
-        None
+        Printf.ksprintf failwith "Could not execute command: %S" cmd
 
   let get ?verbose ?headers ?params ?token fmt =
     Printf.ksprintf (curl GET ?verbose ?headers ?params ?token) fmt
@@ -174,11 +174,7 @@ module Issue = struct
     | Pending
 
   let check_imported ?verbose ?token (owner, repo) id =
-    let json =
-      match Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id with
-      | None -> failwith "Could not retrieve import status"
-      | Some json -> json
-    in
+    let json = Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id in
     match json |> J.member "status" |> J.to_string with
     | "imported" ->
       let id =
@@ -198,11 +194,7 @@ module Issue = struct
 
   let import ?verbose ?token (owner, repo) issue =
     let data = to_json issue in
-    let json =
-      match Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo with
-      | None -> failwith "Could not start issue import"
-      | Some json -> json
-    in
+    let json = Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo in
     json |> J.member "id" |> J.to_int
 end
 
@@ -253,20 +245,12 @@ module Gist = struct
 
   let create ?verbose ?token gist =
     let data = dummy gist.description |> to_json in
-    let json =
-      match Api.post ?verbose ~data ?token "/gists" with
-      | Some json -> json
-      | None -> failwith "Could not create gist"
-    in
+    let json = Api.post ?verbose ~data ?token "/gists" in
     let _html_url = J.member "html_url" json |> J.to_string in
     let git_pull_url = J.member "git_pull_url" json |> J.to_string in
     let id = Scanf.sscanf git_pull_url "https://gist.github.com/%s@.git" (fun s -> s) in
     clone ?verbose ?token id gist.files;
-    let json =
-      match Api.get ?verbose ?token "/gists/%s" id with
-      | None -> failwith "Could not retrieve gist"
-      | Some json -> json
-    in
+    let json = Api.get ?verbose ?token "/gists/%s" id in
     let files_urls =
       J.member "files" json |> J.to_assoc |>
       List.map (fun (_, json) ->
