@@ -41,20 +41,6 @@ module Hashtbl = struct
     h
 end
 
-module List = struct
-  include List
-
-  let rec drop n = function
-    | [] -> []
-    | _ :: l when n > 0 -> drop (pred n) l
-    | _ as l -> l
-
-  let rec truncate n = function
-    | [] -> []
-    | x :: l when n > 0 -> x :: truncate (pred n) l
-    | _ -> []
-end
-
 let with_out s f =
   let oc = open_out_bin s in
   match f oc with
@@ -140,7 +126,8 @@ let append_to_log s =
   let oc = Unix.out_channel_of_descr fd in
   output_string oc s;
   output_char oc '\n';
-  close_out oc
+  close_out oc;
+  prerr_endline s
 
 let read_log () =
   if not (Sys.file_exists "_log") then Hashtbl.create 0
