@@ -192,9 +192,14 @@ let import verbose token repo =
         match Github.Gist.last ~verbose ?token () with
         | None -> a0
         | Some (description, gist_id) ->
-            if string_of_int id =
-               (String.split_on_char '/' description |> List.rev |> List.hd)
-            then begin
+            let gh_id' =
+              description
+              |> String.split_on_char '/'
+              |> List.rev
+              |> List.hd
+              |> int_of_string
+            in
+            if gh_id = gh_id' then begin
               Printf.eprintf "Stale gist %s for PR#%d [#%d] found, removing\n%!"
                 gist_id id gh_id;
               Github.Gist.delete ~verbose ?token gist_id
