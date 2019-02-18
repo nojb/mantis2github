@@ -130,7 +130,8 @@ let append_to_log s =
   prerr_endline s
 
 let read_log () =
-  if not (Sys.file_exists "_log") then Hashtbl.create 0
+  if not (Sys.file_exists "_log") then
+    fun _ -> None
   else begin
     let log = Hashtbl.create 13 in
     let ic = open_in "_log" in
@@ -140,7 +141,7 @@ let read_log () =
       | exception End_of_file -> ()
     in
     loop ();
-    log
+    Hashtbl.find_opt log
   end
 
 let existing_number = 0
@@ -151,7 +152,7 @@ let import verbose token repo =
   let a =
     let log = read_log () in
     List.filter (fun (id, gh_id) ->
-        match Hashtbl.find_opt log id with
+        match log id with
         | None -> true
         | Some gh_id' ->
           if gh_id' <> gh_id then
