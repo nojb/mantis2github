@@ -357,7 +357,7 @@ module Issue = struct
     in
     let assignee =
       match owner, assignee with
-      | "owner", Some s -> mantis2gh s
+      | "ocaml", Some s -> mantis2gh s
       | _ -> None
     in
     let extra_notes urls =

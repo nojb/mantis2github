@@ -114,6 +114,15 @@ module Labels = struct
     |> List.map J.to_string
 end
 
+module Assignees = struct
+  let list ?verbose ?token (owner, repo) =
+    let params = ["per_page", "100"] in
+    Api.get ?verbose ?token ~params "/repos/%s/%s/assignees" owner repo
+    |> J.to_list
+    |> List.map (J.member "login")
+    |> List.map J.to_string
+end
+
 let str s1 s2 l =
   match s2 with
   | None -> l

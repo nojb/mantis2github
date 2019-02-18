@@ -220,7 +220,7 @@ let import verbose token repo =
   List.iter f a
 
 let check verbose token repo =
-  let all_labels =
+  let issues =
     let gh_ids id = id in
     Hashtbl.fold (fun _ issue acc ->
         let gh_issue, gh_gist = Migrate.Issue.migrate repo ~gh_ids issue in
@@ -229,16 +229,33 @@ let check verbose token repo =
           | None -> []
           | Some {Github.Gist.files; _} -> files
         in
-        let gh_issue = gh_issue raw_urls in
-        List.rev_append gh_issue.Github.Issue.issue.Github.Issue.Issue.labels acc
+        gh_issue raw_urls :: acc
       ) issues []
+  in
+  let all_labels =
+    List.fold_left (fun acc {Github.Issue.issue = {Github.Issue.Issue.labels; _}; _} ->
+        List.rev_append labels acc
+      ) [] issues
     |> List.sort_uniq Stdlib.compare
   in
   let gh_labels = Github.Labels.list ~verbose ?token repo in
   List.iter (fun lab ->
       if not (List.mem lab gh_labels) then
         Printf.printf "Missing label: %S\n%!" lab
-    ) all_labels
+    ) all_labels;
+  let gh_assignees = Github.Assignees.list ~verbose ?token repo in
+  let all_assignees =
+    List.fold_left (fun acc {Github.Issue.issue = {Github.Issue.Issue.assignee; _}; _} ->
+        match assignee with
+        | Some s -> s :: acc
+        | None -> acc
+      ) [] issues
+    |> List.sort_uniq Stdlib.compare
+  in
+  List.iter (fun s ->
+      if not (List.mem s gh_assignees) then
+        Printf.printf "Missing assignee: %S\n%!" s
+    ) all_assignees
 
 open Cmdliner
 

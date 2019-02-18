@@ -27,6 +27,10 @@ module Labels : sig
   val list: ?verbose:bool -> ?token:string -> string * string -> string list
 end
 
+module Assignees : sig
+  val list: ?verbose:bool -> ?token:string -> string * string -> string list
+end
+
 module Issue : sig
   module Issue : sig
     type t =
