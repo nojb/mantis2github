@@ -239,13 +239,17 @@ module Gist = struct
     if verbose then Printf.eprintf "+ %s\n%!" cmd;
     assert (0 = Sys.command cmd)
 
-  let clone ?(verbose = false) ?(token = "") id files =
+  let clone_and_push ?(verbose = false) ?(token = "") id files =
     let exec = exec ~verbose in
     let dir = Filename.get_temp_dir_name () in
     Printf.ksprintf exec "rm -rf %s" (Filename.concat dir id);
     Printf.ksprintf exec "git -C %s clone https://%s@gist.github.com/%s.git" dir token id;
     let dir = Filename.concat dir id in
     Printf.ksprintf exec "git -C %s rm '*'" dir;
+    (* Printf.ksprintf exec "git -C %s config user.name $(git -C %s show --format=%%an -s HEAD)" *)
+    (*   dir dir; *)
+    (* Printf.ksprintf exec "git -C %s config user.name $(git -C %s show --format=%%ae -s HEAD)" *)
+    (*   dir dir; *)
     List.iter (fun (name, content) ->
         let oc = open_out_bin (Filename.concat dir name) in
         output_string oc content;
@@ -262,25 +266,37 @@ module Gist = struct
       public = true;
     }
 
-  let create ?verbose ?token gist =
-    let data = dummy gist.description |> to_json in
-    let json = Api.post ?verbose ~data ?token "/gists" in
-    let _html_url = J.member "html_url" json |> J.to_string in
-    let git_pull_url = J.member "git_pull_url" json |> J.to_string in
-    let id = Scanf.sscanf git_pull_url "https://gist.github.com/%s@.git" (fun s -> s) in
-    clone ?verbose ?token id gist.files;
-    let json = Api.get ?verbose ?token "/gists/%s" id in
-    let files_urls =
-      J.member "files" json |> J.to_assoc |>
-      List.map (fun (_, json) ->
-          let filename = json |> J.member "filename" |> J.to_string in
-          let url = json |> J.member "raw_url" |> J.to_string in
-          filename, url
-        )
+  let is_ascii s =
+    let rec loop i =
+      if i >= String.length s then
+        true
+      else begin
+        match s.[i] with
+        | '\x00'..'\x7F' -> loop (succ i)
+        | _ -> false
+      end
     in
-    (* assert (List.sort Stdlib.compare (List.map fst files_urls) = *)
-    (*         List.sort Stdlib.compare (List.map fst gist.files)); *)
-    files_urls
+    loop 0
+
+  let create ?verbose ?token gist =
+    let is_ascii = List.for_all (fun (_, contents) -> is_ascii contents) gist.files in
+    let data = to_json (if is_ascii then gist else dummy gist.description) in
+    let json = Api.post ?verbose ~data ?token "/gists" in
+    let json =
+      if is_ascii then
+        json
+      else begin
+        let id = J.member "id" json |> J.to_string in
+        clone_and_push ?verbose ?token id gist.files;
+        Api.get ?verbose ?token "/gists/%s" id
+      end
+    in
+    J.member "files" json |> J.to_assoc |>
+    List.map (fun (_, json) ->
+        let filename = json |> J.member "filename" |> J.to_string in
+        let raw_url = json |> J.member "raw_url" |> J.to_string in
+        filename, raw_url
+      )
 
   let last ?verbose ?token () =
     let json = Api.get ?verbose ?token "/gists" in
