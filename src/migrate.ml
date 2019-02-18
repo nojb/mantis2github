@@ -119,7 +119,7 @@ module Label = struct
     | Runtime_C_interface
     | Stdlib -> "stdlib"
     | Threads -> "threads"
-    | Tools -> "ocaml{lex,yacc,dep,debug}"
+    | Tools -> "tools"
     | Toplevel -> "toplevel"
     | Typing -> "typing"
     | Web_site -> "website"

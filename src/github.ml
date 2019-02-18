@@ -102,7 +102,8 @@ end
 
 module Labels = struct
   let list ?verbose ?token (owner, repo) =
-    Api.get ?verbose ?token "/repos/%s/%s/labels" owner repo
+    let params = ["per_page", "100"] in
+    Api.get ?verbose ?token ~params "/repos/%s/%s/labels" owner repo
     |> J.to_list
     |> List.map (J.member "name")
     |> List.map J.to_string
