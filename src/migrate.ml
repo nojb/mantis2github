@@ -138,8 +138,8 @@ module Note = struct
 end
 
 module Issue = struct
-  let pr ~owner ~repo (id, gh_id) =
-    Printf.sprintf "[PR#%d](%s/%s#%d)" id owner repo gh_id
+  let pr ~owner:_ ~repo:_ (id, gh_id) =
+    Printf.sprintf "PR#%d [#%d]" id gh_id
 
   let body
       ~owner ~repo
@@ -153,13 +153,13 @@ module Issue = struct
       l
       |> List.map (fun (s1, s2) -> s1, String.trim s2)
       |> List.filter (function (_, "") -> false | _ -> true)
-      |> List.map (fun (s1, s2) -> Printf.sprintf "%s: %s" s1 s2)
+      |> List.map (fun (s1, s2) -> Printf.sprintf "**%s:** %s" s1 s2)
       |> String.concat "\n"
     in
     let see_also l =
       l
       |> List.map (pr ~owner ~repo)
-      |> String.concat " "
+      |> String.concat ", "
     in
     let status =
       match last_status_change with
@@ -202,7 +202,7 @@ module Issue = struct
       ~additional_information file_urls
     =
     let note title contents l =
-      let title = Printf.sprintf "*%s*\n\n" title in
+      let title = Printf.sprintf "**%s**\n\n" title in
       match String.trim contents with
       | "" -> l
       | body ->
