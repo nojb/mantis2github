@@ -116,6 +116,9 @@ module Issue : sig
       child_of: int list;
       parent_of: int list;
       tags: string list;
+      os: string;
+      os_build: string;
+      platform: string;
       files: (string * string) list;
     }
 end

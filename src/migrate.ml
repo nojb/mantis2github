@@ -147,6 +147,7 @@ module Issue = struct
       ~version ~target_version ~fixed_in_version
       ~status ~priority ~severity ~resolution ~last_status_change
       ~duplicate_of ~has_duplicate ~related_to ~child_of ~parent_of
+      ~os ~os_build ~platform
     =
     let combine l =
       l
@@ -179,6 +180,9 @@ module Issue = struct
         "Resolution", Mantis.Resolution.to_string resolution;
         "Priority", Mantis.Priority.to_string priority;
         "Severity", Mantis.Severity.to_string severity;
+        "Platform", platform;
+        "OS", os;
+        "OS Version", os_build;
         "Version", version;
         "Target version", target_version;
         "Fixed in version", fixed_in_version;
@@ -253,6 +257,9 @@ module Issue = struct
         child_of;
         parent_of;
         tags;
+        os;
+        os_build;
+        platform;
         files;
       }
     =
@@ -270,6 +277,7 @@ module Issue = struct
         ~version ~target_version ~fixed_in_version
         ~status ~priority ~severity ~resolution ~last_status_change
         ~duplicate_of ~has_duplicate ~related_to ~child_of ~parent_of
+        ~os ~os_build ~platform
     in
     let labels = labels ~priority ~severity ~category ~status ~resolution in
     let milestone = milestone ~target_version in

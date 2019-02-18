@@ -199,6 +199,9 @@ module Issue = struct
       child_of: int list;
       parent_of: int list;
       tags: string list;
+      os: string;
+      os_build: string;
+      platform: string;
       files: (string * string) list;
     }
 end
@@ -365,13 +368,13 @@ let fetch dbd =
   let query =
     "SELECT id, summary, priority, severity, category_id, date_submitted, last_updated, \
      reporter_id, handler_id, bug_text_id, version, target_version, fixed_in_version, status, \
-     resolution FROM mantis_bug_table ORDER BY id;"
+     resolution, os, os_build, platform FROM mantis_bug_table ORDER BY id;"
   in
   let f = function
     | [|id; summary; priority; severity; category_id;
         date_submitted; last_updated; reporter_id;
         handler_id; bug_text_id; version; target_version;
-        fixed_in_version; status; resolution|] ->
+        fixed_in_version; status; resolution; os; os_build; platform|] ->
         let id = int_of_string id in
         let category = Hashtbl.find categories (int_of_string category_id) in
         let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
@@ -406,7 +409,8 @@ let fetch dbd =
           description; steps_to_reproduce; additional_information;
           version; target_version; fixed_in_version;
           notes; status; last_status_change; resolution; duplicate_of;
-          has_duplicate; related_to; child_of; parent_of; tags; files }
+          has_duplicate; related_to; child_of; parent_of; tags;
+          os; os_build; platform; files }
     | _ ->
         assert false
   in
