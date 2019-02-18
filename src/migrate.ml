@@ -63,17 +63,67 @@ let mantis2gh s =
 module Label = struct
   type t =
     | Duplicate
-    | No_change_required
+    (* | No_change_required *)
     | Wontfix
     | High_priority
     | Suspended
 
+    | Caml_light
+    | Caml_idl
+    | Camlp4
+    | Ocamlbuild
+    | Backend
+    | Compiler_driver
+    | Configure_related
+    | Documentation
+    | Dynlink
+    | Emacs_mode
+    | Language_features
+    | Lexing_and_parsing
+    | Middleend
+    | Ocamldoc
+    | Otherlibs
+    | Platform_support
+    | Runtime_C_interface
+    | Stdlib
+    | Threads
+    | Tools
+    | Toplevel
+    | Typing
+    | Web_site
+    | Junior_job
+
   let to_string = function
     | Duplicate -> "duplicate"
-    | No_change_required -> "no change required"
+    (* | No_change_required -> "no change required" *)
     | Wontfix -> "wontfix"
     | High_priority -> "high-priority"
     | Suspended -> "suspended"
+
+    | Caml_light -> "caml-light"
+    | Caml_idl -> "camlidl"
+    | Camlp4 -> "camlp4"
+    | Ocamlbuild -> "ocamlbuild"
+    | Backend -> "back-end"
+    | Compiler_driver -> "compiler-driver"
+    | Configure_related -> "configure-related"
+    | Documentation -> "documentation"
+    | Dynlink -> "dynlink"
+    | Emacs_mode -> "emacs-mode"
+    | Language_features -> "language-features"
+    | Lexing_and_parsing -> "lexing-and-parsing"
+    | Middleend -> "middle-end"
+    | Ocamldoc -> "ocamldoc"
+    | Otherlibs -> "otherlibs"
+    | Platform_support -> "platform-support"
+    | Runtime_C_interface
+    | Stdlib -> "stdlib"
+    | Threads -> "threads"
+    | Tools -> "ocaml{lex,yacc,dep,debug}"
+    | Toplevel -> "toplevel"
+    | Typing -> "typing"
+    | Web_site -> "website"
+    | Junior_job -> "junior-job"
 
   module L = struct
     type nonrec _t = t list
@@ -82,37 +132,51 @@ module Label = struct
       | Mantis.Priority.None | Normal | Low -> []
       | High | Urgent | Immediate -> [High_priority]
 
-    let of_severity = function
-      | Mantis.Severity.Feature | Tweak | Trivial | Minor -> []
-      | Text | Major | Crash | Block -> []
+    let of_severity _ = []
 
     let of_resolution = function
       | Mantis.Resolution.Open | Fixed | Reopened
       | Unable_to_duplicate -> []
       | Duplicate -> [Duplicate]
-      | Not_a_bug -> [No_change_required]
+      | Not_a_bug -> [] (* [No_change_required] *)
       | Suspended -> [Suspended]
       | Wont_fix -> [Wontfix]
       | Not_fixable -> []
 
-    (* let of_category = function *)
-    (*   | "documentation" -> [Documentation] *)
-    (*   | "ocamldoc" -> [Ocamldoc] *)
-    (*   | "typing" -> [Typing] *)
-    (*   | "back end (clambda to assembly)" -> [Backend] *)
-    (*   | "windows, cross compilation, etc" [Windows_cross_compilation] *)
-    (*   | "runtime system and C interface" -> [Runtime] *)
-    (*   | "standard library" -> [Stdlib] *)
-    (*   | "otherlibs" -> [Otherlibs] *)
-    (*   | "toplevel" -> [Toplevel] *)
-    (*   | "language features" -> [Language_features] *)
-    (*   | "compiler driver" -> [Compiler_driver] *)
-    (*   | "lexing and parsing" -> [Lexing_parsing] *)
-    (*   | "middle end (typedtree to clambda)" -> [Middleend] *)
-    (*   | "threads" -> [Threads] *)
-    (*   | "dynlink and natdynlink" -> [Dynlink] *)
-    (*   | "emacs mode" -> [Emacs] *)
-    (*   | _ -> [] *)
+    let of_category = function
+      | "-for Caml light use https://github.com/camllight/camllight/issues" -> [Caml_light]
+      | "-for CamlIDL use https://github.com/xavierleroy/camlidl/issues" -> [Caml_idl]
+      | "-for Camlp4 use https://github.com/ocaml/camlp4/issues" -> [Camlp4]
+      | "-for ocamlbuild use https://github.com/ocaml/ocamlbuild/issues" -> [Ocamlbuild]
+      | "back end (clambda to assembly)" -> [Backend]
+      | "compiler driver" -> [Compiler_driver]
+      | "configure and build/install" -> [Configure_related]
+      | "documentation" -> [Documentation]
+      | "dynlink and natdynlink" -> [Dynlink]
+      | "emacs mode" -> [Emacs_mode]
+      | "language features" -> [Language_features]
+      | "lexing and parsing" -> [Lexing_and_parsing]
+      | "middle end (typedtree to clambda)" -> [Middleend]
+      | "ocamldoc" -> [Ocamldoc]
+      | "otherlibs" -> [Otherlibs]
+      | "platform support (windows, cross-compilation, etc)" -> [Platform_support]
+      | "runtime system and C interface" -> [Runtime_C_interface]
+      | "standard library" -> [Stdlib]
+      | "threads" -> [Threads]
+      | "tools (ocaml{lex,yacc,dep,debug,...})" -> [Tools]
+      | "toplevel" -> [Toplevel]
+      | "typing" -> [Typing]
+      | "web site" -> [Web_site]
+      | _ -> []
+
+    let of_tag = function
+      | "caml-mode" -> [Emacs_mode]
+      | "junior_job" -> [Junior_job]
+      | "manual" -> [Documentation]
+      | "ocamldoc" -> [Ocamldoc]
+      | "recmod" -> [Typing]
+      | "typing" -> [Typing]
+      | _ -> []
   end
 end
 
@@ -222,8 +286,10 @@ module Issue = struct
          (note "Additional information" additional_information
             (note "File attachments" file_attachments [])))
 
-  let labels ~priority ~severity ~category:_ ~status:_ ~resolution =
-    Label.L.(of_priority priority @ of_severity severity @ of_resolution resolution)
+  let labels ~priority ~severity ~category ~tags ~status:_ ~resolution ~duplicate_of =
+    let dup = if duplicate_of <> [] then [Label.Duplicate] else [] in
+    let tags = List.concat (List.map Label.L.of_tag tags) in
+    Label.L.(of_priority priority @ of_severity severity @ of_resolution resolution @ of_category category @ tags @ dup)
     |> List.sort_uniq Stdlib.compare
     |> List.map Label.to_string
 
@@ -279,7 +345,7 @@ module Issue = struct
         ~duplicate_of ~has_duplicate ~related_to ~child_of ~parent_of
         ~os ~os_build ~platform
     in
-    let labels = labels ~priority ~severity ~category ~status ~resolution in
+    let labels = labels ~priority ~severity ~category ~tags ~status ~resolution ~duplicate_of in
     let milestone = milestone ~target_version in
     let closed = Mantis.Status.is_closed status in
     let updated_at = timestamp last_updated in
