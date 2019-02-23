@@ -193,16 +193,10 @@ let gpr_re =
 let mpr_re =
   Re.(word (seq [opt (char 'M'); str "PR#"; group (rep1 digit)]) |> compile)
 
-let add_pr_links ~owner ~repo ~gh_ids s =
-  let f g =
-    Printf.sprintf "[%s](https://github.com/%s/%s/pull/%s)"
-      (Re.Group.get g 0) owner repo (Re.Group.get g 1)
-  in
+let add_pr_links ~owner:_ ~repo:_ ~gh_ids s =
+  let f g = Printf.sprintf "#%s" (Re.Group.get g 1) in
   let s = Re.replace gpr_re ~f s in
-  let f g =
-    Printf.sprintf "[%s](https://github.com/%s/%s/issues/%d)"
-      (Re.Group.get g 0) owner repo (Re.Group.get g 1 |> int_of_string |> gh_ids)
-  in
+  let f g = Printf.sprintf "#%d" (Re.Group.get g 1 |> int_of_string |> gh_ids) in
   Re.replace mpr_re ~f s
 
 module Note = struct
@@ -222,8 +216,8 @@ module Note = struct
 end
 
 module Issue = struct
-  let pr ~owner ~repo (id, gh_id) =
-    Printf.sprintf "[MPR#%d](https://github.com/%s/%s/issues/%d)" id owner repo gh_id
+  let pr ~owner:_ ~repo:_ (_id, gh_id) =
+    Printf.sprintf "#%d" gh_id
 
   let body ~owner ~repo ~gh_ids file_urls
       ({
@@ -268,7 +262,7 @@ module Issue = struct
     let see_also l =
       l
       |> List.map (fun id -> pr ~owner ~repo (id, gh_ids id))
-      |> String.concat ", "
+      |> String.concat " "
     in
     let status =
       match last_status_change with
