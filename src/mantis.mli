@@ -83,8 +83,8 @@ module Note : sig
     {
       reporter: string option;
       text: string;
-      last_modified: string;
-      date_submitted: string;
+      last_modified: int;
+      date_submitted: int;
     }
 end
 
@@ -96,8 +96,8 @@ module Issue : sig
       priority: Priority.t;
       severity: Severity.t;
       category: string;
-      date_submitted: string;
-      last_updated: string;
+      date_submitted: int;
+      last_updated: int;
       reporter: string option;
       handler: string option;
       description: string;
@@ -108,7 +108,7 @@ module Issue : sig
       fixed_in_version: string;
       notes: Note.t list;
       status: Status.t;
-      last_status_change: (string option * string) option;
+      last_status_change: (string option * int) option;
       resolution: Resolution.t;
       duplicate_of: int list;
       has_duplicate: int list;
@@ -121,6 +121,8 @@ module Issue : sig
       platform: string;
       files: (string * string) list;
     }
+
+  val to_json: t -> Yojson.Basic.t
 end
 
 module Db : sig

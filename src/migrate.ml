@@ -180,9 +180,9 @@ module Label = struct
   end
 end
 
-let timestamp s =
+let timestamp n =
   let {Unix.tm_year; tm_mon; tm_mday; tm_hour; tm_min; tm_sec; _} =
-    Unix.gmtime (float_of_string s)
+    Unix.gmtime (float n)
   in
   Printf.sprintf "%04d-%02d-%02dT%02d:%02d:%02dZ"
     (tm_year + 1900) (tm_mon + 1) tm_mday tm_hour tm_min tm_sec
@@ -206,7 +206,7 @@ module Issue = struct
     Printf.sprintf "PR#%d [#%d]" id gh_id
 
   let body ~owner ~repo ~gh_ids file_urls
-      {
+      ({
         Mantis.Issue.id;
         summary = _;
         priority;
@@ -236,7 +236,7 @@ module Issue = struct
         os_build;
         platform;
         files = _;
-      }
+      } as _issue)
     =
     let combine l =
       l
@@ -278,6 +278,7 @@ module Issue = struct
           |> List.map (fun (filename, url) -> Printf.sprintf "- [%s](%s)\n" filename url)
           |> String.concat ""
     in
+    (* let comment s = "\n<!-- ocaml =\n" ^ s ^ "\n-->\n" in *)
     String.concat ""
       [
         combine
@@ -307,6 +308,7 @@ module Issue = struct
         note "Steps to reproduce" steps_to_reproduce;
         note "Additional information" additional_information;
         note "File attachments" file_attachments;
+        (* comment (Yojson.Basic.pretty_to_string ~std:true (Mantis.Issue.to_json issue)) *)
       ]
 
   let labels ~priority ~severity ~category ~tags ~status:_ ~resolution ~duplicate_of =

@@ -166,8 +166,8 @@ module Note = struct
     {
       reporter: string option;
       text: string;
-      last_modified: string;
-      date_submitted: string;
+      last_modified: int;
+      date_submitted: int;
     }
 end
 
@@ -179,8 +179,8 @@ module Issue = struct
       priority: Priority.t;
       severity: Severity.t;
       category: string;
-      date_submitted: string;
-      last_updated: string;
+      date_submitted: int;
+      last_updated: int;
       reporter: string option;
       handler: string option;
       description: string;
@@ -191,7 +191,7 @@ module Issue = struct
       fixed_in_version: string;
       notes: Note.t list;
       status: Status.t;
-      last_status_change: (string option * string) option;
+      last_status_change: (string option * int) option;
       resolution: Resolution.t;
       duplicate_of: int list;
       has_duplicate: int list;
@@ -204,6 +204,67 @@ module Issue = struct
       platform: string;
       files: (string * string) list;
     }
+
+  let to_json
+      {
+        id;
+        summary = _;
+        priority;
+        severity;
+        category;
+        date_submitted;
+        last_updated;
+        reporter;
+        handler;
+        description = _;
+        steps_to_reproduce = _;
+        additional_information = _;
+        version;
+        target_version;
+        fixed_in_version;
+        notes = _;
+        status;
+        last_status_change = _; (* TODO *)
+        resolution;
+        duplicate_of;
+        has_duplicate;
+        related_to;
+        child_of;
+        parent_of;
+        tags;
+        os;
+        os_build;
+        platform;
+        files = _;
+      }
+    =
+    let fields =
+      [
+        "id", `Int id;
+        "priority", `String (Priority.to_string priority);
+        "severity", `String (Severity.to_string severity);
+        "category", `String category;
+        "date_submitted", `Int date_submitted;
+        "last_updated", `Int last_updated;
+        "reporter", (match reporter with None -> `Null | Some s -> `String s);
+        "handler", (match handler with None -> `Null | Some s -> `String s);
+        "version", `String version;
+        "target_version", `String target_version;
+        "fixed_in_version", `String fixed_in_version;
+        "status", `String (Status.to_string status);
+        "resolution", `String (Resolution.to_string resolution);
+        "duplicate_of", `List (List.map (fun n -> `Int n) duplicate_of);
+        "has_duplicate", `List (List.map (fun n -> `Int n) has_duplicate);
+        "related_to", `List (List.map (fun n -> `Int n) related_to);
+        "child_of", `List (List.map (fun n -> `Int n) child_of);
+        "parent_of", `List (List.map (fun n -> `Int n) parent_of);
+        "tags", `List (List.map (fun s -> `String s) tags);
+        "os", `String os;
+        "os_build", `String os_build;
+        "platform", `String platform;
+      ]
+    in
+    `Assoc fields
 end
 
 module Db = struct
@@ -281,6 +342,8 @@ let fetch dbd =
       | [|bug_id; reporter_id; bugnote_text_id; last_modified; date_submitted|] ->
           let reporter = Hashtbl.find_opt users (int_of_string reporter_id) in
           let text = Hashtbl.find texts (int_of_string bugnote_text_id) in
+          let last_modified = int_of_string last_modified in
+          let date_submitted = int_of_string date_submitted in
           int_of_string bug_id, {Note.reporter; text; last_modified; date_submitted}
       | _ ->
           assert false
@@ -294,7 +357,7 @@ let fetch dbd =
     let f = function
       | [|bug_id; user_id; date_modified|] ->
           let user = Hashtbl.find_opt users (int_of_string user_id) in
-          int_of_string bug_id, (user, date_modified)
+          int_of_string bug_id, (user, int_of_string date_modified)
       | _ ->
           assert false
     in
@@ -403,6 +466,8 @@ let fetch dbd =
         let related_to = get_rel Related_to in
         let child_of = get_rel Child_of in
         let parent_of = get_rel Parent_of in
+        let date_submitted = int_of_string date_submitted in
+        let last_updated = int_of_string last_updated in
         id,
         { Issue.id; summary; priority; severity; category;
           date_submitted; last_updated; reporter; handler;
