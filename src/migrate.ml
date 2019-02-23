@@ -205,24 +205,49 @@ module Issue = struct
   let pr ~owner:_ ~repo:_ (id, gh_id) =
     Printf.sprintf "PR#%d [#%d]" id gh_id
 
-  let body
-      ~owner ~repo
-      ~id ?(reporter = "") ~tags ~category
-      ~version ~target_version ~fixed_in_version
-      ~status ~priority ~severity ~resolution ~last_status_change
-      ~duplicate_of ~has_duplicate ~related_to ~child_of ~parent_of
-      ~os ~os_build ~platform
+  let body ~owner ~repo ~gh_ids file_urls
+      {
+        Mantis.Issue.id;
+        summary = _;
+        priority;
+        severity;
+        category;
+        date_submitted = _;
+        last_updated = _;
+        reporter;
+        handler;
+        description;
+        steps_to_reproduce;
+        additional_information;
+        version;
+        target_version;
+        fixed_in_version;
+        notes = _;
+        status;
+        last_status_change;
+        resolution;
+        duplicate_of;
+        has_duplicate;
+        related_to;
+        child_of;
+        parent_of;
+        tags;
+        os;
+        os_build;
+        platform;
+        files = _;
+      }
     =
     let combine l =
       l
       |> List.map (fun (s1, s2) -> s1, String.trim s2)
       |> List.filter (function (_, "") -> false | _ -> true)
-      |> List.map (fun (s1, s2) -> Printf.sprintf "**%s:** %s" s1 s2)
-      |> String.concat "\n"
+      |> List.map (fun (s1, s2) -> Printf.sprintf "**%s:** %s\n" s1 s2)
+      |> String.concat ""
     in
     let see_also l =
       l
-      |> List.map (pr ~owner ~repo)
+      |> List.map (fun id -> pr ~owner ~repo (id, gh_ids id))
       |> String.concat ", "
     in
     let status =
@@ -236,42 +261,14 @@ module Issue = struct
           Printf.sprintf "%s (on %s)"
             (Mantis.Status.to_string status) (timestamp s)
     in
-    combine
-      [
-        "Original bug ID", Printf.sprintf "PR#%d" id;
-        "Reporter", reporter;
-        "Status", status;
-        "Resolution", Mantis.Resolution.to_string resolution;
-        "Priority", Mantis.Priority.to_string priority;
-        "Severity", Mantis.Severity.to_string severity;
-        "Platform", platform;
-        "OS", os;
-        "OS Version", os_build;
-        "Version", version;
-        "Target version", target_version;
-        "Fixed in version", fixed_in_version;
-        "Category", category;
-        "Tags", String.concat ", " tags;
-        "Duplicate of", see_also duplicate_of;
-        "Has duplicate", see_also has_duplicate;
-        "Related to", see_also related_to;
-        "Child of", see_also child_of;
-        "Parent of", see_also parent_of;
-      ]
-
-  let extra_notes
-      ~created_at
-      ~description
-      ~steps_to_reproduce
-      ~additional_information file_urls
-    =
-    let note title contents l =
-      let title = Printf.sprintf "**%s**\n\n" title in
+    let reporter = match reporter with None -> "" | Some s -> s in
+    let handler = match handler with None -> "" | Some s -> s in
+    let note title contents =
       match String.trim contents with
-      | "" -> l
+      | "" -> ""
       | body ->
-          let body = title ^ body in
-          {Github.Issue.Comment.created_at = Some created_at; body} :: l
+          let title = Printf.sprintf "\n## %s\n\n" title in
+          String.concat "" [title; body; "\n"]
     in
     let file_attachments =
       match file_urls with
@@ -281,10 +278,36 @@ module Issue = struct
           |> List.map (fun (filename, url) -> Printf.sprintf "- [%s](%s)\n" filename url)
           |> String.concat ""
     in
-    note "Bug description" description
-      (note "Steps to reproduce" steps_to_reproduce
-         (note "Additional information" additional_information
-            (note "File attachments" file_attachments [])))
+    String.concat ""
+      [
+        combine
+          [
+            "Original bug ID", Printf.sprintf "PR#%d" id;
+            "Reporter", reporter;
+            "Assigned to", handler;
+            "Status", status;
+            "Resolution", Mantis.Resolution.to_string resolution;
+            "Priority", Mantis.Priority.to_string priority;
+            "Severity", Mantis.Severity.to_string severity;
+            "Platform", platform;
+            "OS", os;
+            "OS Version", os_build;
+            "Version", version;
+            "Target version", target_version;
+            "Fixed in version", fixed_in_version;
+            "Category", category;
+            "Tags", String.concat ", " tags;
+            "Duplicate of", see_also duplicate_of;
+            "Has duplicate", see_also has_duplicate;
+            "Related to", see_also related_to;
+            "Child of", see_also child_of;
+            "Parent of", see_also parent_of;
+          ];
+        note "Bug description" description;
+        note "Steps to reproduce" steps_to_reproduce;
+        note "Additional information" additional_information;
+        note "File attachments" file_attachments;
+      ]
 
   let labels ~priority ~severity ~category ~tags ~status:_ ~resolution ~duplicate_of =
     let dup = if duplicate_of <> [] then [Label.Duplicate] else [] in
@@ -297,7 +320,7 @@ module Issue = struct
     None
 
   let migrate (owner, repo) ~gh_ids
-      {
+      ({
         Mantis.Issue.id;
         summary;
         priority;
@@ -305,46 +328,32 @@ module Issue = struct
         category;
         date_submitted;
         last_updated;
-        reporter;
+        reporter = _;
         handler = assignee;
-        description;
-        steps_to_reproduce;
-        additional_information;
-        version;
+        description = _;
+        steps_to_reproduce = _;
+        additional_information = _;
+        version = _;
         target_version;
-        fixed_in_version;
+        fixed_in_version = _;
         notes;
         status;
         last_status_change;
         resolution;
         duplicate_of;
-        has_duplicate;
-        related_to;
-        child_of;
-        parent_of;
+        has_duplicate = _;
+        related_to = _;
+        child_of = _;
+        parent_of = _;
         tags;
-        os;
-        os_build;
-        platform;
+        os = _;
+        os_build = _;
+        platform = _;
         files;
-      }
+      } as issue)
     =
     let title = if summary = "" then "*no title*" else summary in
-    let body =
-      let gh id = id, gh_ids id in
-      let duplicate_of = List.map gh duplicate_of in
-      let has_duplicate = List.map gh has_duplicate in
-      let related_to = List.map gh related_to in
-      let child_of = List.map gh child_of in
-      let parent_of = List.map gh parent_of in
-      body
-        ~owner ~repo
-        ~id ?reporter ~tags ~category
-        ~version ~target_version ~fixed_in_version
-        ~status ~priority ~severity ~resolution ~last_status_change
-        ~duplicate_of ~has_duplicate ~related_to ~child_of ~parent_of
-        ~os ~os_build ~platform
-    in
+    let body urls = body ~owner ~repo ~gh_ids urls issue in
     let labels = labels ~priority ~severity ~category ~tags ~status ~resolution ~duplicate_of in
     let milestone = milestone ~target_version in
     let closed = Mantis.Status.is_closed status in
@@ -360,22 +369,15 @@ module Issue = struct
       | "ocaml", Some s -> mantis2gh s
       | _ -> None
     in
-    let extra_notes urls =
-      extra_notes
-        ~created_at
-        ~description
-        ~steps_to_reproduce
-        ~additional_information urls
-    in
-    let issue =
-      {Github.Issue.Issue.title; body;
+    let issue urls =
+      {Github.Issue.Issue.title; body = body urls;
        created_at = Some created_at;
        updated_at = Some updated_at;
        assignee; milestone; closed_at;
        closed = Some closed; labels}
     in
-    let comments urls = extra_notes urls @ List.map Note.migrate notes in
-    let issue urls = {Github.Issue.issue; comments = comments urls} in
+    let comments = List.map Note.migrate notes in
+    let issue urls = {Github.Issue.issue = issue urls; comments} in
     let gist =
       match files with
       | [] -> None
