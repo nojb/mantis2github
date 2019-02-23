@@ -23,10 +23,6 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
-module Note : sig
-  val migrate: Mantis.Note.t -> Github.Issue.Comment.t
-end
-
 module Issue : sig
   val migrate:
     string * string -> gh_ids:(int -> int) ->

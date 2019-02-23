@@ -187,23 +187,43 @@ let timestamp n =
   Printf.sprintf "%04d-%02d-%02dT%02d:%02d:%02dZ"
     (tm_year + 1900) (tm_mon + 1) tm_mday tm_hour tm_min tm_sec
 
+let gpr_re =
+  Re.(word (seq [str "GPR#"; group (rep1 digit)]) |> compile)
+
+let mpr_re =
+  Re.(word (seq [opt (char 'M'); str "PR#"; group (rep1 digit)]) |> compile)
+
+let add_pr_links ~owner ~repo ~gh_ids s =
+  let f g =
+    Printf.sprintf "[%s](https://github.com/%s/%s/pull/%s)"
+      (Re.Group.get g 0) owner repo (Re.Group.get g 1)
+  in
+  let s = Re.replace gpr_re ~f s in
+  let f g =
+    Printf.sprintf "[%s](https://github.com/%s/%s/issues/%d)"
+      (Re.Group.get g 0) owner repo (Re.Group.get g 1 |> int_of_string |> gh_ids)
+  in
+  Re.replace mpr_re ~f s
+
 module Note = struct
-  let migrate {Mantis.Note.reporter; text; last_modified = _; date_submitted} =
+  let migrate ~owner ~repo ~gh_ids
+      {Mantis.Note.reporter; text; last_modified = _; date_submitted}
+    =
     let body =
       let reporter =
         match reporter with
         | None -> ""
         | Some s -> Printf.sprintf "**Comment author:** %s\n" s
       in
-      let text = String.trim text in
+      let text = String.trim text |> add_pr_links ~owner ~repo ~gh_ids in
       if text <> "" then reporter ^ "\n" ^ text else reporter
     in
     {Github.Issue.Comment.body; created_at = Some (timestamp date_submitted)}
 end
 
 module Issue = struct
-  let pr ~owner:_ ~repo:_ (id, gh_id) =
-    Printf.sprintf "PR#%d [#%d]" id gh_id
+  let pr ~owner ~repo (id, gh_id) =
+    Printf.sprintf "[MPR#%d](https://github.com/%s/%s/issues/%d)" id owner repo gh_id
 
   let body ~owner ~repo ~gh_ids file_urls
       ({
@@ -378,7 +398,7 @@ module Issue = struct
        assignee; milestone; closed_at;
        closed = Some closed; labels}
     in
-    let comments = List.map Note.migrate notes in
+    let comments = List.map (Note.migrate ~owner ~repo ~gh_ids) notes in
     let issue urls = {Github.Issue.issue = issue urls; comments} in
     let gist =
       match files with
@@ -386,7 +406,7 @@ module Issue = struct
       | _ :: _ ->
           let description =
             Printf.sprintf "https://github.com/%s/%s/issues/%d"
-              owner repo (try gh_ids id with Not_found -> 1000)
+              owner repo (gh_ids id)
           in
           Some {Github.Gist.files; description; public = true}
     in
