@@ -294,7 +294,7 @@ module Issue = struct
       | "" -> ""
       | body ->
           let title = Printf.sprintf "\n## %s\n\n" title in
-          String.concat "" [title; body; "\n"]
+          String.concat "" [title; add_pr_links ~owner ~repo ~gh_ids body; "\n"]
     in
     let file_attachments =
       match file_urls with
