@@ -23,6 +23,9 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
+let milestone_re =
+  Re.(seq [start; digit; char '.'; repn digit 2 (Some 2); char '.'; digit] |> compile)
+
 let mantis2gh = function
   | "administrator" -> "bactrian"
   | "xleroy" -> "xavierleroy"
@@ -344,10 +347,12 @@ module Issue = struct
     |> List.sort_uniq Stdlib.compare
     |> List.map Label.to_string
 
-  let milestone ~target_version:_ =
-    None
+  let milestone ~target_version ~milestones =
+    match Re.exec_opt milestone_re (String.trim target_version) with
+    | None -> None
+    | Some g -> List.assoc_opt (Re.Group.get g 0) milestones
 
-  let migrate (owner, repo) ~gh_ids
+  let migrate (owner, repo) ~gh_ids ~milestones
       ({
         Mantis.Issue.id;
         summary;
@@ -383,7 +388,7 @@ module Issue = struct
     let title = if summary = "" then "*no title*" else summary in
     let body urls = body ~owner ~repo ~gh_ids urls issue in
     let labels = labels ~priority ~severity ~category ~tags ~status ~resolution ~duplicate_of in
-    let milestone = milestone ~target_version in
+    let milestone = milestone ~target_version ~milestones in
     let closed = Mantis.Status.is_closed status in
     let updated_at = timestamp last_updated in
     let created_at = timestamp date_submitted in

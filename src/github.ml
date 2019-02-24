@@ -124,7 +124,9 @@ module Milestones = struct
     Api.get ?verbose ?token ~params "/repos/%s/%s/milestones" owner repo
     |> J.to_list
     |> List.map (fun json ->
-        (J.member "number" json |> J.to_int), (J.member "title" json |> J.to_string)
+        let title = J.member "title" json |> J.to_string in
+        let number = J.member "number" json |> J.to_int in
+        title, number
       )
 
   let create ?verbose ?token (owner, repo) title =

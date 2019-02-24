@@ -29,7 +29,7 @@ module Labels : sig
 end
 
 module Milestones : sig
-  val list: ?verbose:bool -> ?token:string -> string * string -> (int * string) list
+  val list: ?verbose:bool -> ?token:string -> string * string -> (string * int) list
   val create: ?verbose:bool -> ?token:string -> string * string -> string -> int
 end
 

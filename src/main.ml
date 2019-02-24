@@ -74,7 +74,7 @@ let extract ids =
   let gh_ids id = id in
   let f id =
     let issue = Hashtbl.find issues id in
-    let issue, gist = Migrate.Issue.migrate ("ocaml", "ocaml") ~gh_ids issue in
+    let issue, gist = Migrate.Issue.migrate ("ocaml", "ocaml") ~gh_ids ~milestones:[] issue in
     let urls =
       match gist with
       | None -> []
@@ -150,6 +150,7 @@ let existing_number = 0
 let import verbose token repo =
   let a = Hashtbl.keys issues |> compute_assignment (succ existing_number) in
   let gh_ids = Hashtbl.find (Hashtbl.of_assoc a) in
+  let milestones = Github.Milestones.list ~verbose ?token repo in
   let a =
     let log = read_log () in
     List.filter (fun (id, gh_id) ->
@@ -209,7 +210,7 @@ let import verbose token repo =
   in
   let f (id, gh_id) =
     let issue = Hashtbl.find issues id in
-    let gh_issue, gist = Migrate.Issue.migrate repo ~gh_ids issue in
+    let gh_issue, gist = Migrate.Issue.migrate repo ~gh_ids ~milestones issue in
     let raw_urls =
       match gist with
       | None -> []
@@ -220,10 +221,10 @@ let import verbose token repo =
   List.iter f a
 
 let check verbose token repo =
-  let issues =
+  let gh_issues =
     let gh_ids id = id in
     Hashtbl.fold (fun _ issue acc ->
-        let gh_issue, gh_gist = Migrate.Issue.migrate repo ~gh_ids issue in
+        let gh_issue, gh_gist = Migrate.Issue.migrate repo ~gh_ids ~milestones:[] issue in
         let raw_urls =
           match gh_gist with
           | None -> []
@@ -235,13 +236,16 @@ let check verbose token repo =
   let all_labels =
     List.fold_left (fun acc {Github.Issue.issue = {Github.Issue.Issue.labels; _}; _} ->
         List.rev_append labels acc
-      ) [] issues
+      ) [] gh_issues
     |> List.sort_uniq Stdlib.compare
   in
   let gh_labels = Github.Labels.list ~verbose ?token repo in
+  let first = ref true in
   List.iter (fun lab ->
-      if not (List.mem lab gh_labels) then
-        Printf.printf "Missing label: %S\n%!" lab
+      if not (List.mem lab gh_labels) then begin
+        if !first then (first := false; print_endline "Missing labels:");
+        print_endline lab
+      end
     ) all_labels;
   let gh_assignees = Github.Assignees.list ~verbose ?token repo in
   let all_assignees =
@@ -249,13 +253,34 @@ let check verbose token repo =
         match assignee with
         | Some s -> s :: acc
         | None -> acc
-      ) [] issues
+      ) [] gh_issues
     |> List.sort_uniq Stdlib.compare
   in
+  first := true;
   List.iter (fun s ->
-      if not (List.mem s gh_assignees) then
-        Printf.printf "Missing assignee: %S\n%!" s
-    ) all_assignees
+      if not (List.mem s gh_assignees) then begin
+        if !first then (first := false; print_endline "Missing assignees:");
+        print_endline s
+      end
+    ) all_assignees;
+  let gh_milestones = Github.Milestones.list ~verbose ?token repo in
+  let all_milestones =
+    Hashtbl.fold (fun _ {Mantis.Issue.target_version; _} acc ->
+        match Re.exec_opt Migrate.milestone_re (String.trim target_version) with
+        | None ->
+            acc
+        | Some g ->
+            Re.Group.get g 0 :: acc
+      ) issues []
+    |> List.sort_uniq Stdlib.compare
+  in
+  first := true;
+  List.iter (fun s ->
+      if not (List.mem_assoc s gh_milestones) then begin
+        if !first then (first := false; print_endline "Missing milestones:");
+        print_endline s
+      end
+    ) all_milestones
 
 open Cmdliner
 

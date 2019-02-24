@@ -23,8 +23,10 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
+val milestone_re: Re.re
+
 module Issue : sig
   val migrate:
-    string * string -> gh_ids:(int -> int) ->
+    string * string -> gh_ids:(int -> int) -> milestones:(string * int) list ->
     Mantis.Issue.t -> ((string * string) list -> Github.Issue.t) * Github.Gist.t option
 end
