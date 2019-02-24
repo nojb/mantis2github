@@ -25,6 +25,12 @@
 
 module Labels : sig
   val list: ?verbose:bool -> ?token:string -> string * string -> string list
+  val create: ?verbose:bool -> ?token:string -> string * string -> string -> int -> unit
+end
+
+module Milestones : sig
+  val list: ?verbose:bool -> ?token:string -> string * string -> (int * string) list
+  val create: ?verbose:bool -> ?token:string -> string * string -> string -> int
 end
 
 module Assignees : sig

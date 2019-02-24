@@ -112,6 +112,26 @@ module Labels = struct
     |> J.to_list
     |> List.map (J.member "name")
     |> List.map J.to_string
+
+  let create ?verbose ?token (owner, repo) name color =
+    let data = `Assoc ["name", `String name; "color", `String (Printf.sprintf "%x" color)] in
+    Api.post ?verbose ?token ~data "/repos/%s/%s/labels" owner repo |> ignore
+end
+
+module Milestones = struct
+  let list ?verbose ?token (owner, repo) =
+    let params = ["state", "all"] in
+    Api.get ?verbose ?token ~params "/repos/%s/%s/milestones" owner repo
+    |> J.to_list
+    |> List.map (fun json ->
+        (J.member "number" json |> J.to_int), (J.member "title" json |> J.to_string)
+      )
+
+  let create ?verbose ?token (owner, repo) title =
+    let data = `Assoc ["title", `String title; "state", `String "closed"] in
+    Api.post ?verbose ?token ~data "/repos/%s/%s/milestones" owner repo
+    |> J.member "number"
+    |> J.to_int
 end
 
 module Assignees = struct
