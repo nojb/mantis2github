@@ -193,11 +193,23 @@ let gpr_re =
 let mpr_re =
   Re.(word (seq [opt (char 'M'); str "PR#"; group (rep1 digit)]) |> compile)
 
+let mantis_re =
+  Re.(word (seq [str "http"; opt (char 's'); str "://caml.inria.fr/mantis/view.php?id=";
+                 group (rep1 digit)]) |> compile)
+
 let add_pr_links ~owner:_ ~repo:_ ~gh_ids s =
   let f g = Printf.sprintf "#%s" (Re.Group.get g 1) in
   let s = Re.replace gpr_re ~f s in
-  let f g = Printf.sprintf "#%d" (Re.Group.get g 1 |> int_of_string |> gh_ids) in
-  Re.replace mpr_re ~f s
+  let f g =
+    let id = Re.Group.get g 1 |> int_of_string in
+    match gh_ids id with
+    | exception Not_found ->
+        Re.Group.get g 0
+    | gh_id ->
+        Printf.sprintf "#%d" gh_id
+  in
+  let s = Re.replace mpr_re ~f s in
+  Re.replace mantis_re ~f s
 
 module Note = struct
   let migrate ~owner ~repo ~gh_ids
