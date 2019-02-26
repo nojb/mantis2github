@@ -220,7 +220,10 @@ let import verbose token repo =
   in
   List.iter f a
 
-let check verbose token repo =
+let color () =
+  Random.int 0xffffff
+
+let check verbose token repo force =
   let gh_issues =
     let gh_ids id = id in
     Hashtbl.fold (fun _ issue acc ->
@@ -244,7 +247,8 @@ let check verbose token repo =
   List.iter (fun lab ->
       if not (List.mem lab gh_labels) then begin
         if !first then (first := false; print_endline "Missing labels:");
-        print_endline lab
+        print_endline lab;
+        if force then Github.Labels.create ~verbose ?token repo lab (color ())
       end
     ) all_labels;
   let gh_assignees = Github.Assignees.list ~verbose ?token repo in
@@ -278,7 +282,8 @@ let check verbose token repo =
   List.iter (fun s ->
       if not (List.mem_assoc s gh_milestones) then begin
         if !first then (first := false; print_endline "Missing milestones:");
-        print_endline s
+        print_endline s;
+        if force then Github.Milestones.create ~verbose ?token repo s |> ignore
       end
     ) all_milestones
 
@@ -306,9 +311,13 @@ let import_cmd =
   Term.(const import $ verbose_t $ token_t $ repo_t),
   Term.info "import" ~doc
 
+let force_t =
+  let doc = "Create" in
+  Arg.(value & flag & info ["force"] ~doc)
+
 let check_cmd =
   let doc = "Check." in
-  Term.(const check $ verbose_t $ token_t $ repo_t),
+  Term.(const check $ verbose_t $ token_t $ repo_t $ force_t),
   Term.info "check" ~doc
 
 let default_cmd =
