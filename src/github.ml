@@ -294,7 +294,7 @@ module Gist = struct
     {
       files = ["hello", "world"];
       description;
-      public = true;
+      public = false;
     }
 
   let is_ascii s =

@@ -419,7 +419,7 @@ module Issue = struct
             Printf.sprintf "https://github.com/%s/%s/issues/%d"
               owner repo (gh_ids id)
           in
-          Some {Github.Gist.files; description; public = true}
+          Some {Github.Gist.files; description; public = false}
     in
     issue, gist
 end
