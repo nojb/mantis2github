@@ -220,8 +220,55 @@ let import verbose token repo =
   in
   List.iter f a
 
-let color () =
-  Random.int 0xffffff
+let color =
+  let x =
+    ref [ 0xfd597a;
+          0xa1dcf3;
+          0xc1f2e7;
+          0x92d3fc;
+          0x1c528d;
+          0x1c8a8d;
+          0x6895fa;
+          0xcca266;
+          0xdeb887;
+          0xa39e98;
+          0x7a7875;
+          0xd4d1c8;
+          0x948572;
+          0x9a4340;
+          0x4de4c0;
+          0x10100e;
+          0xffff96;
+          0xfbde57;
+          0xffc0cb;
+          0xe6e6fa;
+          0xffaa00;
+          0xffff96;
+          0xff32c8;
+          0x00ff7d;
+          0xeda17c;
+          0x00ced1;
+          0x468499;
+          0xfff68f;
+          0x66cdaa;
+          0xf6546a;
+          0xffc3a0;
+          0x20b2aa;
+          0xffd700;
+          0xffa500;
+          0xfa8072;
+          0xff7373;
+          0x008080;
+          0xfa8072;
+          0xffffff;
+          0xef606b;
+          0x319d9d;
+          0xe5c100 ]
+  in
+  fun () ->
+    match !x with
+    | c :: r -> x := r; c
+    | [] -> failwith "No more colors!"
 
 let check verbose token repo force =
   let gh_issues =
