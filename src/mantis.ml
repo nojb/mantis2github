@@ -202,6 +202,7 @@ module Issue = struct
       os: string;
       os_build: string;
       platform: string;
+      monitored_by: string list;
       files: (string * string) list;
     }
 
@@ -235,6 +236,7 @@ module Issue = struct
         os;
         os_build;
         platform;
+        monitored_by;
         files = _;
       }
     =
@@ -262,6 +264,7 @@ module Issue = struct
         "os", `String os;
         "os_build", `String os_build;
         "platform", `String platform;
+        "monitored_by", `List (List.map (fun s -> `String s) monitored_by);
       ]
     in
     `Assoc fields
@@ -428,6 +431,15 @@ let fetch dbd =
     in
     Db.exec dbd f "SELECT bug_id, tag_id FROM mantis_bug_tag_table;"
   in
+  let monitors =
+    let f = function
+      | [|user_id; bug_id|] ->
+          int_of_string bug_id, user_id
+      | _ ->
+          assert false
+    in
+    Db.exec dbd f "SELECT user_id, bug_id FROM mantis_bug_monitor_table;"
+  in
   let query =
     "SELECT id, summary, priority, severity, category_id, date_submitted, last_updated, \
      reporter_id, handler_id, bug_text_id, version, target_version, fixed_in_version, status, \
@@ -468,6 +480,7 @@ let fetch dbd =
         let parent_of = get_rel Parent_of in
         let date_submitted = int_of_string date_submitted in
         let last_updated = int_of_string last_updated in
+        let monitored_by = Hashtbl.find_all monitors id in
         id,
         { Issue.id; summary; priority; severity; category;
           date_submitted; last_updated; reporter; handler;
@@ -475,7 +488,7 @@ let fetch dbd =
           version; target_version; fixed_in_version;
           notes; status; last_status_change; resolution; duplicate_of;
           has_duplicate; related_to; child_of; parent_of; tags;
-          os; os_build; platform; files }
+          os; os_build; platform; monitored_by; files }
     | _ ->
         assert false
   in

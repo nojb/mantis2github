@@ -119,6 +119,7 @@ module Issue : sig
       os: string;
       os_build: string;
       platform: string;
+      monitored_by: string list;
       files: (string * string) list;
     }
 

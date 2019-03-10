@@ -26,7 +26,7 @@
 let milestone_re =
   Re.(seq [start; digit; char '.'; repn digit 2 (Some 2); char '.'; digit] |> compile)
 
-let mantis2gh = function
+let mantis2gh_exn = function
   | "administrator" -> "bactrian"
   | "xleroy" -> "xavierleroy"
   (* | "remy" -> "diremy" *)
@@ -60,8 +60,13 @@ let mantis2gh = function
   (* | "guesdon" -> "zoggy" *)
   | _ -> raise Not_found
 
+let mantis2gh_opt s =
+  try Some (mantis2gh_exn s) with Not_found -> None
+
 let mantis2gh s =
-  try Some (mantis2gh s) with Not_found -> None
+  match mantis2gh_exn s with
+  | s -> "@" ^ s
+  | exception Not_found -> s
 
 module Label = struct
   type t =
@@ -264,6 +269,7 @@ module Issue = struct
         os;
         os_build;
         platform;
+        monitored_by;
         files = _;
       } as _issue)
     =
@@ -285,7 +291,7 @@ module Issue = struct
           Mantis.Status.to_string status
       | Some (Some s1, s2) ->
           Printf.sprintf "%s (by %s on %s)"
-            (Mantis.Status.to_string status) s1 (timestamp s2)
+            (Mantis.Status.to_string status) (mantis2gh s1) (timestamp s2)
       | Some (None, s) ->
           Printf.sprintf "%s (on %s)"
             (Mantis.Status.to_string status) (timestamp s)
@@ -312,9 +318,9 @@ module Issue = struct
       [
         combine
           [
-            "Original bug ID", Printf.sprintf "PR#%d" id;
-            "Reporter", reporter;
-            "Assigned to", handler;
+            "Original bug ID", string_of_int id;
+            "Reporter", mantis2gh reporter;
+            "Assigned to", mantis2gh handler;
             "Status", status;
             "Resolution", Mantis.Resolution.to_string resolution;
             "Priority", Mantis.Priority.to_string priority;
@@ -332,6 +338,7 @@ module Issue = struct
             "Related to", see_also related_to;
             "Child of", see_also child_of;
             "Parent of", see_also parent_of;
+            "Monitored by", String.concat " " (List.map mantis2gh monitored_by);
           ];
         note "Bug description" description;
         note "Steps to reproduce" steps_to_reproduce;
@@ -382,6 +389,7 @@ module Issue = struct
         os = _;
         os_build = _;
         platform = _;
+        monitored_by = _;
         files;
       } as issue)
     =
@@ -399,7 +407,7 @@ module Issue = struct
     in
     let assignee =
       match owner, assignee with
-      | "ocaml", Some s -> mantis2gh s
+      | "ocaml", Some s -> mantis2gh_opt s
       | _ -> None
     in
     let issue urls =
