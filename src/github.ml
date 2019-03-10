@@ -277,10 +277,10 @@ module Gist = struct
     Printf.ksprintf exec "git -C %s clone https://%s@gist.github.com/%s.git" dir token id;
     let dir = Filename.concat dir id in
     Printf.ksprintf exec "git -C %s rm '*'" dir;
-    (* Printf.ksprintf exec "git -C %s config user.name $(git -C %s show --format=%%an -s HEAD)" *)
-    (*   dir dir; *)
-    (* Printf.ksprintf exec "git -C %s config user.name $(git -C %s show --format=%%ae -s HEAD)" *)
-    (*   dir dir; *)
+    Printf.ksprintf exec "git -C %s config user.name \"$(git -C %s show --format=%%an -s HEAD)\""
+      dir dir;
+    Printf.ksprintf exec "git -C %s config user.email \"$(git -C %s show --format=%%ae -s HEAD)\""
+      dir dir;
     List.iter (fun (name, content) ->
         let oc = open_out_bin (Filename.concat dir name) in
         output_string oc content;
