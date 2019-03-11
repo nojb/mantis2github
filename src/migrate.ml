@@ -276,7 +276,7 @@ module Note = struct
       let reporter =
         match reporter with
         | None -> ""
-        | Some s -> Printf.sprintf "**Comment author:** %s\n" s
+        | Some s -> Printf.sprintf "**Comment author:** %s\n" (mantis2gh s)
       in
       let text = String.trim text |> add_pr_links ~owner ~repo ~gh_ids in
       if text <> "" then reporter ^ "\n" ^ text else reporter
@@ -339,7 +339,7 @@ module Issue = struct
       | None ->
           Mantis.Status.to_string status
       | Some (Some s1, s2) ->
-          Printf.sprintf "%s (by %s on %s)"
+          Printf.sprintf "%s (set by %s on %s)"
             (Mantis.Status.to_string status) (mantis2gh s1) (timestamp s2)
       | Some (None, s) ->
           Printf.sprintf "%s (on %s)"
