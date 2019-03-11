@@ -72,6 +72,7 @@ let _other_users = function
   | "sdev" -> "stijn.devriendt"
   | "c-cube" | "Simon.cruanes" -> "c-cube"
   | "hcarty" -> "hcarty"
+  | "Boris Yakobowski" -> "Yakobowski"
   | _ -> raise Not_found
 
 let mantis2gh_opt s =
