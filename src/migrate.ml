@@ -65,6 +65,7 @@ let _other_users = function
   | "xclerc" -> "xclerc"
   | "yawaramin" -> "yawaramin"
   | "drup" -> "Drup"
+  | "johnwhitington" -> "johnwhitington"
   | _ -> raise Not_found
 
 let mantis2gh_opt s =
