@@ -69,6 +69,7 @@ let _other_users = function
   | "rixed" -> "rixed"
   | "def" -> "let-def"
   | "thizanne" -> "thizanne"
+  | "sdev" -> "stijn.devriendt"
   | _ -> raise Not_found
 
 let mantis2gh_opt s =
