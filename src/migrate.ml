@@ -100,7 +100,8 @@ let mantis2gh_users =
     "ygrek", "ygrek";
     "edwin", "edwintorok";
     "jjb", "jberdine";
-    "samoht", "samoht" ]
+    "samoht", "samoht";
+    "asai", "kenichi-asai" ]
 
 let mantis2gh_opt =
   let h = Hashtbl.create (List.length mantis2gh_users) in
