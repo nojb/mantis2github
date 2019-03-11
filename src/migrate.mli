@@ -24,6 +24,7 @@
    For more information, please refer to <http://unlicense.org> *)
 
 val milestone_re: Re.re
+val mantis2gh_users: (string * string) list
 
 module Issue : sig
   val migrate:

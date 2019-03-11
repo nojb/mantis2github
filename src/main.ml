@@ -271,6 +271,19 @@ let color =
     | [] -> failwith "No more colors!"
 
 let check verbose token repo force =
+  if false then begin
+    let tmp = Filename.temp_file "curl" "out" in
+    List.iter (fun (_, gh) ->
+        assert (0 = Printf.ksprintf Sys.command "curl -Ss -w '%%{http_code}\n' -o /dev/null https://api.github.com/users/%s > %s" gh tmp);
+        let code =
+          let ic = open_in tmp in
+          let n = int_of_string (input_line ic) in
+          close_in ic;
+          n
+        in
+        if code <> 200 then Printf.printf "Missing GH user: %s\n%!" gh
+      ) Migrate.mantis2gh_users
+  end;
   let gh_issues =
     let gh_ids id = id in
     Hashtbl.fold (fun _ issue acc ->

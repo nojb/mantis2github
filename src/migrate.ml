@@ -90,7 +90,7 @@ let mantis2gh_users =
     "johnwhitington", "johnwhitington";
     "rixed", "rixed";
     "thizanne", "thizanne";
-    "sdev", "stijn.devriendt";
+    "sdev", "stijn-devriendt";
     "c-cube", "c-cube";
     "Simon.cruanes", "c-cube";
     "hcarty", "hcarty";
