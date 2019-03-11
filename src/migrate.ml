@@ -257,6 +257,14 @@ let add_pr_links ~owner:_ ~repo:_ ~gh_ids s =
         Printf.sprintf "#%d" gh_id
   in
   let s = Re.replace mpr_re ~f s in
+  let f g =
+    let id = Re.Group.get g 1 |> int_of_string in
+    match gh_ids id with
+    | exception Not_found ->
+        Re.Group.get g 0
+    | gh_id ->
+        Printf.sprintf "https://github.com/ocaml/ocaml/issues/%d" gh_id
+  in
   Re.replace mantis_re ~f s
 
 module Note = struct
