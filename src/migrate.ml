@@ -26,64 +26,87 @@
 let milestone_re =
   Re.(seq [start; digit; char '.'; repn digit 2 (Some 2); char '.'; digit] |> compile)
 
-let mantis2gh_exn = function
-  | "administrator" -> "bactrian"
-  | "xleroy" -> "xavierleroy"
-  (* | "remy" -> "diremy" *)
-  | "doligez" -> "damiendoligez"
-  | "garrigue" -> "garrigue"
-  | "frisch" -> "alainfrisch"
-  | "weis" -> "pierreweis"
-  (* | "mauny" -> "mauny" *)
-  | "avsm" -> "avsm"
-  | "dra" -> "dra27"
-  (* | "fpottier" -> "fpottier" *)
-  | "maranget" -> "maranget"
-  | "Sebastien_Hinderer"  | "shindere" -> "shindere"
-  | "yallop" -> "yallop"
-  | "chambart" -> "chambart"
-  | "shinwell" -> "mshinwell"
-  | "lefessan" -> "lefessan"
-  (* | "protz" -> "protz" *)
-  | "lpw25" -> "lpw25"
-  | "gasche" -> "gasche"
-  (* | "hongboz" -> "bobzhang" *)
-  | "def" -> "let-def"
-  | "stedolan" -> "stedolan"
-  | "trefis" -> "trefis"
-  | "damien" -> "damiendoligez"
-  | "nojb" | "nojebar" -> "nojb"
-  | "octachron" -> "Octachron"
-  | "Armael" -> "Armael"
-  | "dim" -> "diml"
-  (* | "guesdon" -> "zoggy" *)
-  | _ -> raise Not_found
+let ocaml_dev =
+  [ "alainfrisch";
+    "Armael";
+    "chambart";
+    "damiendoligez";
+    "diml";
+    "dra27";
+    "garrigue";
+    "gasche";
+    "lefessan";
+    "let-def";
+    "lpw25";
+    "maranget";
+    "mshinwell";
+    "nojb";
+    "Octachron";
+    "pierreweis";
+    "shindere";
+    "stedolan";
+    "trefis";
+    "xavierleroy" ]
 
-let _other_users = function
-  | "dbuenzli" -> "dbuenzli"
-  | "jacques-henri.jourdan" -> "jhjourdan"
-  | "xclerc" -> "xclerc"
-  | "yawaramin" -> "yawaramin"
-  | "drup" -> "Drup"
-  | "johnwhitington" -> "johnwhitington"
-  | "rixed" -> "rixed"
-  | "def" -> "let-def"
-  | "thizanne" -> "thizanne"
-  | "sdev" -> "stijn.devriendt"
-  | "c-cube" | "Simon.cruanes" -> "c-cube"
-  | "hcarty" -> "hcarty"
-  | "Boris Yakobowski" -> "Yakobowski"
-  | "mottl" -> "mmottl"
-  | "Martin Jambon" -> "mjambon"
-  | _ -> raise Not_found
+let mantis2gh_users =
+  [ "administrator", "bactrian";
+    "xleroy", "xavierleroy";
+    "remy", "diremy";
+    "doligez", "damiendoligez";
+    "garrigue", "garrigue";
+    "frisch", "alainfrisch";
+    "weis", "pierreweis";
+    "mauny", "mauny";
+    "avsm", "avsm";
+    "dra", "dra27";
+    "fpottier", "fpottier";
+    "maranget", "maranget";
+    "Sebastien_Hinderer", "shindere";
+    "shindere", "shindere";
+    "yallop", "yallop";
+    "chambart", "chambart";
+    "shinwell", "mshinwell";
+    "lefessan", "lefessan";
+    "protz", "protz";
+    "lpw25", "lpw25";
+    "gasche", "gasche";
+    "hongboz", "bobzhang";
+    "def", "let-def";
+    "stedolan", "stedolan";
+    "trefis", "trefis";
+    "damien", "damiendoligez";
+    "nojb", "nojb";
+    "nojebar", "nojb";
+    "octachron", "Octachron";
+    "Armael", "Armael";
+    "dim", "diml";
+    "guesdon", "zoggy";
+    "kayceesrk", "kayceesrk";
+    "dbuenzli", "dbuenzli";
+    "jacques-henri.jourdan", "jhjourdan";
+    "xclerc", "xclerc";
+    "yawaramin", "yawaramin";
+    "drup", "Drup";
+    "johnwhitington", "johnwhitington";
+    "rixed", "rixed";
+    "thizanne", "thizanne";
+    "sdev", "stijn.devriendt";
+    "c-cube", "c-cube";
+    "Simon.cruanes", "c-cube";
+    "hcarty", "hcarty";
+    "Boris Yakobowski", "Yakobowski";
+    "mottl", "mmottl";
+    "Martin Jambon", "mjambon" ]
 
-let mantis2gh_opt s =
-  try Some (mantis2gh_exn s) with Not_found -> None
+let mantis2gh_opt =
+  let h = Hashtbl.create (List.length mantis2gh_users) in
+  List.iter (fun (k, v) -> Hashtbl.add h k v) mantis2gh_users;
+  Hashtbl.find_opt h
 
 let mantis2gh s =
-  match mantis2gh_exn s with
-  | s -> "@" ^ s
-  | exception Not_found -> s
+  match mantis2gh_opt s with
+  | Some s -> "@" ^ s
+  | None -> s
 
 module Label = struct
   type t =
@@ -424,7 +447,11 @@ module Issue = struct
     in
     let assignee =
       match owner, assignee with
-      | "ocaml", Some s -> mantis2gh_opt s
+      | "ocaml", Some s ->
+          begin match mantis2gh_opt s with
+          | Some s as x when List.mem s ocaml_dev -> x
+          | _ -> None
+          end
       | _ -> None
     in
     let issue urls =
