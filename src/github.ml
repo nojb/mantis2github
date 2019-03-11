@@ -114,7 +114,7 @@ module Labels = struct
     |> List.map J.to_string
 
   let create ?verbose ?token (owner, repo) name color =
-    let data = `Assoc ["name", `String name; "color", `String (Printf.sprintf "%x" color)] in
+    let data = `Assoc ["name", `String name; "color", `String (Printf.sprintf "%06x" color)] in
     Api.post ?verbose ?token ~data "/repos/%s/%s/labels" owner repo |> ignore
 end
 

@@ -128,7 +128,7 @@ let append_to_log (id, gh_id) =
   output_string oc s;
   output_char oc '\n';
   close_out oc;
-  print_endline s
+  prerr_endline s
 
 let read_log () =
   if not (Sys.file_exists "_log") then
