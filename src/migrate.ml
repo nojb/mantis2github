@@ -48,7 +48,6 @@ let mantis2gh_exn = function
   | "lpw25" -> "lpw25"
   | "gasche" -> "gasche"
   (* | "hongboz" -> "bobzhang" *)
-  (* | "jacques-henri.jourdan" -> "jhjourdan" *)
   | "def" -> "let-def"
   | "stedolan" -> "stedolan"
   | "trefis" -> "trefis"
@@ -62,6 +61,8 @@ let mantis2gh_exn = function
 
 let _other_users = function
   | "dbuenzli" -> "dbuenzli"
+  | "jacques-henri.jourdan" -> "jhjourdan"
+  | "xclerc" -> "xclerc"
   | _ -> raise Not_found
 
 let mantis2gh_opt s =
