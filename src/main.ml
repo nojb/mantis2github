@@ -41,6 +41,8 @@ module Hashtbl = struct
     h
 end
 
+let interactive = ref false
+
 let with_out s f =
   let oc = open_out_bin s in
   match f oc with
@@ -217,8 +219,15 @@ let import verbose token repo =
       | Some gist -> Github.Gist.create ~verbose ?token gist
     in
     do_import id gh_id (gh_issue raw_urls);
+    if !interactive then begin
+      Printf.printf "Issue imported. Continue? [Y/N/C] %!";
+      match String.lowercase_ascii (read_line ()) with
+      | "n" | "no" -> raise Exit
+      | "c" | "cont" -> interactive := false
+      | _ -> ()
+    end
   in
-  List.iter f a
+  try List.iter f a with Exit -> ()
 
 let color =
   let x =
