@@ -53,6 +53,7 @@ let mantis2gh_users =
     "xleroy", "xavierleroy";
     "remy", "diremy";
     "doligez", "damiendoligez";
+    "damien", "damiendoligez";
     "garrigue", "garrigue";
     "frisch", "alainfrisch";
     "weis", "pierreweis";
@@ -74,7 +75,6 @@ let mantis2gh_users =
     "def", "let-def";
     "stedolan", "stedolan";
     "trefis", "trefis";
-    "damien", "damiendoligez";
     "nojb", "nojb";
     "nojebar", "nojb";
     "octachron", "Octachron";
@@ -96,7 +96,8 @@ let mantis2gh_users =
     "hcarty", "hcarty";
     "Boris Yakobowski", "Yakobowski";
     "mottl", "mmottl";
-    "Martin Jambon", "mjambon" ]
+    "Martin Jambon", "mjambon";
+    "ygrek", "ygrek" ]
 
 let mantis2gh_opt =
   let h = Hashtbl.create (List.length mantis2gh_users) in
