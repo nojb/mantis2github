@@ -74,6 +74,7 @@ let _other_users = function
   | "hcarty" -> "hcarty"
   | "Boris Yakobowski" -> "Yakobowski"
   | "mottl" -> "mmottl"
+  | "Martin Jambon" -> "mjambon"
   | _ -> raise Not_found
 
 let mantis2gh_opt s =
