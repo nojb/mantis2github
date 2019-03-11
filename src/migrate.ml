@@ -71,6 +71,7 @@ let _other_users = function
   | "thizanne" -> "thizanne"
   | "sdev" -> "stijn.devriendt"
   | "c-cube" | "Simon.cruanes" -> "c-cube"
+  | "hcarty" -> "hcarty"
   | _ -> raise Not_found
 
 let mantis2gh_opt s =
