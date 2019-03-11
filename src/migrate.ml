@@ -63,6 +63,7 @@ let _other_users = function
   | "dbuenzli" -> "dbuenzli"
   | "jacques-henri.jourdan" -> "jhjourdan"
   | "xclerc" -> "xclerc"
+  | "yawaramin" -> "yawaramin"
   | _ -> raise Not_found
 
 let mantis2gh_opt s =
