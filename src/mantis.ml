@@ -29,6 +29,10 @@ module Hashtbl = struct
     let h = Hashtbl.create (List.length l) in
     List.iter (fun (id, x) -> Hashtbl.add h id x) l;
     h
+  let of_list_choose l =
+    let h = Hashtbl.create (List.length l) in
+    List.iter (function (id, Some x) -> Hashtbl.add h id x | (_, None) -> ()) l;
+    h
 end
 
 module Priority = struct
@@ -293,6 +297,16 @@ module Db = struct
       f (Array.map extract arr)
     in
     Mysql.map (Mysql.exec dbd query) ~f |> Hashtbl.of_list
+
+  let exec_choose dbd f query =
+    let f arr =
+      let extract = function
+        | Some x -> x
+        | None -> Printf.ksprintf failwith "Unexpected result: %S" query
+      in
+      f (Array.map extract arr)
+    in
+    Mysql.map (Mysql.exec dbd query) ~f |> Hashtbl.of_list_choose
 end
 
 type rel =
@@ -434,11 +448,13 @@ let fetch dbd =
   let monitors =
     let f = function
       | [|user_id; bug_id|] ->
-          int_of_string bug_id, user_id
+          let user_name = Hashtbl.find_opt users (int_of_string user_id) in
+          if user_name = None then Printf.eprintf "User #%s not found\n%!" user_id;
+          int_of_string bug_id, user_name
       | _ ->
           assert false
     in
-    Db.exec dbd f "SELECT user_id, bug_id FROM mantis_bug_monitor_table;"
+    Db.exec_choose dbd f "SELECT user_id, bug_id FROM mantis_bug_monitor_table;"
   in
   let query =
     "SELECT id, summary, priority, severity, category_id, date_submitted, last_updated, \
