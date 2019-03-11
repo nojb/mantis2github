@@ -70,6 +70,7 @@ let _other_users = function
   | "def" -> "let-def"
   | "thizanne" -> "thizanne"
   | "sdev" -> "stijn.devriendt"
+  | "c-cube" | "Simon.cruanes" -> "c-cube"
   | _ -> raise Not_found
 
 let mantis2gh_opt s =
