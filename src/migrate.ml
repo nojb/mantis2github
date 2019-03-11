@@ -60,6 +60,10 @@ let mantis2gh_exn = function
   (* | "guesdon" -> "zoggy" *)
   | _ -> raise Not_found
 
+let _other_users = function
+  | "dbuenzli" -> "dbuenzli"
+  | _ -> raise Not_found
+
 let mantis2gh_opt s =
   try Some (mantis2gh_exn s) with Not_found -> None
 
