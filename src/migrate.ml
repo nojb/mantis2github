@@ -106,6 +106,7 @@ let mantis2gh_users =
     "rauan", "rauanmayemir";
     "leonidas", "Leonidas-from-XIV";
     "oandrieu", "oandrieu";
+    "sbriais", "sbriais";
   ]
 
 let mantis2gh_opt =
