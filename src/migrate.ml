@@ -105,6 +105,7 @@ let mantis2gh_users =
     "asai", "kenichi-asai";
     "rauan", "rauanmayemir";
     "leonidas", "Leonidas-from-XIV";
+    "oandrieu", "oandrieu";
   ]
 
 let mantis2gh_opt =
@@ -254,7 +255,7 @@ let mantis_re =
   Re.(word (seq [str "http"; opt (char 's'); str "://caml.inria.fr/mantis/view.php?id=";
                  group (rep1 digit)]) |> compile)
 
-let add_pr_links ~owner:_ ~repo:_ ~gh_ids s =
+let add_pr_links ~owner ~repo ~gh_ids s =
   let f g = Printf.sprintf "#%s" (Re.Group.get g 1) in
   let s = Re.replace gpr_re ~f s in
   let f g =
@@ -272,7 +273,7 @@ let add_pr_links ~owner:_ ~repo:_ ~gh_ids s =
     | exception Not_found ->
         Re.Group.get g 0
     | gh_id ->
-        Printf.sprintf "https://github.com/ocaml/ocaml/issues/%d" gh_id
+        Printf.sprintf "%s/%s#%d" owner repo gh_id
   in
   Re.replace mantis_re ~f s
 
