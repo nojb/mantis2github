@@ -49,7 +49,8 @@ let ocaml_dev =
     "xavierleroy" ]
 
 let mantis2gh_users =
-  [ "administrator", "bactrian";
+  [
+    "administrator", "bactrian";
     "xleroy", "xavierleroy";
     "remy", "diremy";
     "doligez", "damiendoligez";
@@ -101,7 +102,10 @@ let mantis2gh_users =
     "edwin", "edwintorok";
     "jjb", "jberdine";
     "samoht", "samoht";
-    "asai", "kenichi-asai" ]
+    "asai", "kenichi-asai";
+    "rauan", "rauanmayemir";
+    "leonidas", "Leonidas-from-XIV";
+  ]
 
 let mantis2gh_opt =
   let h = Hashtbl.create (List.length mantis2gh_users) in
