@@ -50,7 +50,7 @@ let ocaml_dev =
 
 let mantis2gh_users =
   [
-    "administrator", "bactrian";
+    "administrator", "vicuna";
     "xleroy", "xavierleroy";
     "remy", "diremy";
     "doligez", "damiendoligez";
