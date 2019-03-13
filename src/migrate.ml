@@ -112,6 +112,7 @@ let mantis2gh_users =
     "ejgallego", "ejgallego";
     "murmour", "murmour";
     "mrm", "murmour";
+    "glondu", "glondu";
   ]
 
 let mantis2gh_opt =
