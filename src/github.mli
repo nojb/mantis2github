@@ -23,6 +23,8 @@
 
    For more information, please refer to <http://unlicense.org> *)
 
+val total_num_requests : int ref
+
 module Labels : sig
   val list: ?verbose:bool -> ?token:string -> string * string -> string list
   val create: ?verbose:bool -> ?token:string -> string * string -> string -> int -> unit

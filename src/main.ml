@@ -41,7 +41,7 @@ module Hashtbl = struct
     h
 end
 
-let interactive = ref false
+let interactive = ref true
 
 let with_out s f =
   let oc = open_out_bin s in
@@ -225,7 +225,8 @@ let import verbose token repo =
       | "n" | "no" -> raise Exit
       | "c" | "cont" -> interactive := false
       | _ -> ()
-    end
+    end;
+    if !Github.total_num_requests >= 4900 then raise Exit;
   in
   try List.iter f a with Exit -> ()
 

@@ -25,6 +25,8 @@
 
 module J = Yojson.Basic.Util
 
+let total_num_requests = ref 0
+
 module Api = struct
   type t =
     | POST
@@ -35,6 +37,8 @@ module Api = struct
     | GET -> "GET"
     | POST -> "POST"
     | DELETE -> "DELETE"
+
+  let last_request = ref 0.
 
   let root = "https://api.github.com"
 
@@ -75,6 +79,10 @@ module Api = struct
     in
     if verbose then Printf.eprintf "+ %s\n%!" cmd;
     let tmp_http_code = Filename.temp_file "curl" "code" in
+    let now = Unix.time () in
+    if !last_request +. 1. > now then (prerr_endline "Sleeping..."; Unix.sleep 1);
+    last_request := now;
+    incr total_num_requests;
     match Sys.command (Printf.sprintf "%s > %s" cmd tmp_http_code) with
     | 0 ->
         let ic = open_in tmp_http_code in
