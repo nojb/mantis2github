@@ -67,7 +67,7 @@ let issues =
       dbhost = Some "127.0.0.1";
       dbport = None;
       dbsocket = None;
-      dbname = Some "db";
+      dbname = Some "mantis";
     }
   in
   Mantis.Db.use db Mantis.fetch

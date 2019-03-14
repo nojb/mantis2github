@@ -383,6 +383,7 @@ module Issue = struct
           |> String.concat ""
     in
     (* let comment s = "\n<!-- ocaml =\n" ^ s ^ "\n-->\n" in *)
+    let mantis2gh' s = if String.contains s ' ' then "\"" ^ s ^ "\"" else s in
     String.concat ""
       [
         combine
@@ -407,7 +408,7 @@ module Issue = struct
             "Related to", see_also related_to;
             "Child of", see_also child_of;
             "Parent of", see_also parent_of;
-            "Monitored by", String.concat " " (List.map mantis2gh monitored_by);
+            "Monitored by", String.concat " " (List.map mantis2gh' monitored_by);
           ];
         note "Bug description" description;
         note "Steps to reproduce" steps_to_reproduce;
