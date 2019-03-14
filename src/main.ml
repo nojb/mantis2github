@@ -147,7 +147,7 @@ let read_log () =
     Hashtbl.find_opt log
   end
 
-let existing_number = 0
+let existing_number = 2324
 
 let import verbose token repo =
   let a = Hashtbl.keys issues |> compute_assignment (succ existing_number) in
