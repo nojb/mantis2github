@@ -50,7 +50,7 @@ let ocaml_dev =
 
 let mantis2gh_users =
   [
-    "administrator", "vicuna";
+    (* "administrator", "vicuna"; *)
     "xleroy", "xavierleroy";
     "remy", "diremy";
     "doligez", "damiendoligez";
@@ -113,6 +113,10 @@ let mantis2gh_users =
     "murmour", "murmour";
     "mrm", "murmour";
     "glondu", "glondu";
+    "hhugo", "hhugo";
+    "Christophe Troestler", "Chris00";
+    "sliquister", "sliquister";
+    "whitequark", "whitequark";
   ]
 
 let mantis2gh_opt =
