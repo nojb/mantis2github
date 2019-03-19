@@ -43,6 +43,16 @@ end
 
 let interactive = ref true
 
+let rec ask_interactive () =
+  if not !interactive then true
+  else begin
+    Printf.printf "Issue imported. Continue? [Y/N/C] %!";
+    match String.lowercase_ascii (read_line ()) with
+    | "n" | "no" -> false
+    | "c" | "cont" -> interactive := false; true
+    | _ -> true
+  end
+
 let with_out s f =
   let oc = open_out_bin s in
   match f oc with
@@ -222,14 +232,7 @@ let import verbose token repo =
       | Some gist -> Github.Gist.create ~verbose ?token gist
     in
     do_import id gh_id (gh_issue raw_urls);
-    if !interactive then begin
-      Printf.printf "Issue imported. Continue? [Y/N/C] %!";
-      match String.lowercase_ascii (read_line ()) with
-      | "n" | "no" -> raise Exit
-      | "c" | "cont" -> interactive := false
-      | _ -> ()
-    end;
-    if !Github.total_num_requests >= 4900 then raise Exit;
+    if not (ask_interactive ()) || !Github.total_num_requests >= 4900 then raise Exit
   in
   try List.iter f a with Exit -> ()
 
@@ -380,32 +383,36 @@ let relabel verbose token repo force =
   | (id, gh_id) :: _ -> Printf.eprintf "Restarting from #%d (MPR#%d)\n%!" gh_id id
   | [] -> ()
   end;
-  List.iter (fun (id, gh_id) ->
-      let issue = Hashtbl.find issues id in
-      let labels =
-        match issue.Mantis.Issue.severity, issue.Mantis.Issue.status with
-        | Mantis.Severity.Feature, _ ->
-            ["feature-wish"]
-        | _, Mantis.Status.New ->
-            []
-        | _ ->
-            ["bug"]
-      in
-      if labels <> [] then begin
-        match Github.Issue.get_labels ~verbose ?token repo gh_id with
-        | Error Moved ->
-            Printf.eprintf "Issue #%d moved, can't update labels.\n%!" gh_id
-        | Error Deleted ->
-            Printf.eprintf "Issue #%d deleted, can't update labels.\n%!" gh_id
-        | Ok labels0 ->
-            let new_labels = List.sort_uniq Stdlib.compare (labels @ labels0) in
-            Printf.printf "Relabelling #%d with [%s] => [%s]\n%!" gh_id
-              (String.concat "; " labels0) (String.concat "; " new_labels);
-            if force && new_labels <> List.sort_uniq Stdlib.compare labels0 then
-              Github.Issue.set_labels ~verbose ?token repo gh_id new_labels
-      end;
-      append_to_log (id, gh_id)
-    ) log
+  try
+    List.iter (fun (id, gh_id) ->
+        let issue = Hashtbl.find issues id in
+        let labels =
+          match issue.Mantis.Issue.severity, issue.Mantis.Issue.status with
+          | Mantis.Severity.Feature, _ ->
+              ["feature-wish"]
+          | _, Mantis.Status.New ->
+              []
+          | _ ->
+              ["bug"]
+        in
+        if labels <> [] then begin
+          match Github.Issue.get_labels ~verbose ?token repo gh_id with
+          | Error Moved ->
+              Printf.eprintf "Issue #%d moved, can't update labels.\n%!" gh_id
+          | Error Deleted ->
+              Printf.eprintf "Issue #%d deleted, can't update labels.\n%!" gh_id
+          | Ok labels0 ->
+              let new_labels = List.sort_uniq Stdlib.compare (labels @ labels0) in
+              Printf.printf "Relabelling #%d with [%s] => [%s]\n%!" gh_id
+                (String.concat "; " labels0) (String.concat "; " new_labels);
+              if force && new_labels <> List.sort_uniq Stdlib.compare labels0 then
+                Github.Issue.set_labels ~verbose ?token repo gh_id new_labels
+        end;
+        append_to_log (id, gh_id);
+        if not (ask_interactive ()) then raise Exit
+      ) log
+  with Exit ->
+    ()
 
 open Cmdliner
 
