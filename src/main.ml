@@ -365,6 +365,7 @@ let check verbose token repo force =
 
 let relabel verbose token repo force =
   let log = really_read_log ~name:"issue_mapping.txt" in
+  assert (Hashtbl.length log = Hashtbl.length issues);
   let past_log = read_log () in
   let log =
     Hashtbl.fold (fun id gh_id acc ->
