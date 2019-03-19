@@ -360,7 +360,7 @@ let check verbose token repo force =
       end
     ) all_milestones
 
-let relabel verbose token repo =
+let relabel verbose token repo force =
   let log = really_read_log ~name:"issue_mapping.txt" in
   Hashtbl.iter (fun id gh_id ->
       let issue = Hashtbl.find issues id in
@@ -381,7 +381,8 @@ let relabel verbose token repo =
             Printf.eprintf "Issue #%d deleted, can't update labels.\n%!" gh_id
         | Ok labels0 ->
             let new_labels = List.sort_uniq Stdlib.compare (labels @ labels0) in
-            Github.Issue.set_labels ~verbose ?token repo gh_id new_labels
+            if force && new_labels <> List.sort_uniq Stdlib.compare labels0 then
+              Github.Issue.set_labels ~verbose ?token repo gh_id new_labels
       end
     ) log
 
@@ -425,7 +426,7 @@ let default_cmd =
 
 let relabel_cmd =
   let doc = "Relabel." in
-  Term.(const relabel $ verbose_t $ token_t $ repo_t),
+  Term.(const relabel $ verbose_t $ token_t $ repo_t $ force_t),
   Term.info "relabel" ~doc
 
 let cmds =
