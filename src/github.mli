@@ -76,10 +76,15 @@ module Issue : sig
     | Failed
     | Pending
 
+  type error =
+    | Deleted
+    | Moved
+
   val import: ?verbose:bool -> ?token:string -> string * string -> t -> int
   val check_imported: ?verbose:bool -> ?token:string -> string * string -> int -> res
   val exists: ?verbose:bool -> ?token:string -> string * string -> int -> bool
-  val add_labels: ?verbose:bool -> ?token:string -> string * string -> int -> string list -> unit
+  val get_labels: ?verbose:bool -> ?token:string -> string * string -> int -> (string list, error) result
+  val set_labels: ?verbose:bool -> ?token:string -> string * string -> int -> string list -> unit
 end
 
 module Gist : sig

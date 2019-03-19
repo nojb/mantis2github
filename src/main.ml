@@ -373,7 +373,16 @@ let relabel verbose token repo =
         | _ ->
             ["bug"]
       in
-      if labels <> [] then Github.Issue.add_labels ~verbose ?token repo gh_id labels
+      if labels <> [] then begin
+        match Github.Issue.get_labels ~verbose ?token repo gh_id with
+        | Error Moved ->
+            Printf.eprintf "Issue #%d moved, can't update labels.\n%!" gh_id
+        | Error Deleted ->
+            Printf.eprintf "Issue #%d deleted, can't update labels.\n%!" gh_id
+        | Ok labels0 ->
+            let new_labels = List.sort_uniq Stdlib.compare (labels @ labels0) in
+            Github.Issue.set_labels ~verbose ?token repo gh_id new_labels
+      end
     ) log
 
 open Cmdliner

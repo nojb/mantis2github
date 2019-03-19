@@ -282,15 +282,19 @@ module Issue = struct
     | Error _ -> false
     | Ok _ -> true
 
-  let add_labels ?verbose ?token (owner, repo) id labels =
-    let labels_of_json json =
-      json
-      |> J.member "labels"
-      |> J.to_list
-      |> List.map (J.member "name")
-      |> List.map J.to_string
-      |> List.sort_uniq Stdlib.compare
-    in
+  let labels_of_json json =
+    json
+    |> J.member "labels"
+    |> J.to_list
+    |> List.map (J.member "name")
+    |> List.map J.to_string
+    |> List.sort_uniq Stdlib.compare
+
+  type error =
+    | Deleted
+    | Moved
+
+  let get_labels ?verbose ?token (owner, repo) id =
     match Api.get ?verbose ?token "/repos/%s/%s/issues/%d" owner repo id with
     | Ok json ->
         let repo0 =
@@ -301,24 +305,24 @@ module Issue = struct
           |> List.rev
           |> List.hd
         in
-        if repo = repo0 then begin
-          let old_labels = labels_of_json json in
-          let new_labels = List.sort_uniq Stdlib.compare (old_labels @ labels) in
-          if old_labels <> new_labels then begin
-            let data = `Assoc ["labels", `List (List.map (fun s -> `String s) new_labels)] in
-            match Api.patch ?verbose ~data ?token "/repos/%s/%s/issues/%d" owner repo id with
-            | Ok json ->
-                let labels = labels_of_json json in
-                if List.sort_uniq Stdlib.compare labels <> new_labels then failwith "Inconsistent response from GitHub, aborting!"
-            | Error _ ->
-                failwith "Unexpected error from GitHub while updating labels"
-          end
-        end else
-          Printf.eprintf "Issue #%d has been moved, can't update labels.\n%!" id
+        if repo = repo0 then
+          Ok (labels_of_json json)
+        else
+          Error Moved
     | Error Gone ->
-      Printf.eprintf "Issue #%d has been deleted, can't update labels.\n%!" id
+        Error Deleted
     | Error _ ->
-      failwith "Unexpected error from GitHub"
+        failwith "Unexpected error from GitHub"
+
+  let set_labels ?verbose ?token (owner, repo) id labels =
+    let labels = List.sort_uniq Stdlib.compare labels in
+    let data = `Assoc ["labels", `List (List.map (fun s -> `String s) labels)] in
+    let json =
+      Api.patch ?verbose ~data ?token "/repos/%s/%s/issues/%d" owner repo id
+      |> Api.extract_ok
+    in
+    let labels' = labels_of_json json in
+    if labels <> labels' then failwith "Inconsistent response from GitHub, aborting!"
 end
 
 module Gist = struct
