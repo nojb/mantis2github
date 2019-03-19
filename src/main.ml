@@ -43,7 +43,7 @@ end
 
 let interactive = ref true
 
-let rec ask_interactive () =
+let ask_interactive () =
   if not !interactive then true
   else begin
     Printf.printf "Issue imported. Continue? [Y/N/C] %!";
