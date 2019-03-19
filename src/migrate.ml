@@ -383,7 +383,10 @@ module Issue = struct
           |> String.concat ""
     in
     (* let comment s = "\n<!-- ocaml =\n" ^ s ^ "\n-->\n" in *)
-    let mantis2gh' s = if String.contains s ' ' then "\"" ^ s ^ "\"" else s in
+    let mantis2gh' s =
+      let s = mantis2gh s in
+      if String.contains s ' ' then "\"" ^ s ^ "\"" else s
+    in
     String.concat ""
       [
         combine
