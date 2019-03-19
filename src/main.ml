@@ -362,7 +362,9 @@ let check verbose token repo force =
 
 let relabel verbose token repo force =
   let log = really_read_log ~name:"issue_mapping.txt" in
-  Hashtbl.iter (fun id gh_id ->
+  let log = Hashtbl.fold (fun id gh_id acc -> (id, gh_id) :: acc) log [] in
+  let log = List.sort Stdlib.compare log in
+  List.iter (fun (id, gh_id) ->
       let issue = Hashtbl.find issues id in
       let labels =
         match issue.Mantis.Issue.severity, issue.Mantis.Issue.status with
@@ -381,6 +383,8 @@ let relabel verbose token repo force =
             Printf.eprintf "Issue #%d deleted, can't update labels.\n%!" gh_id
         | Ok labels0 ->
             let new_labels = List.sort_uniq Stdlib.compare (labels @ labels0) in
+            Printf.printf "Relabelling #%d with [%s] => [%s]\n%!" gh_id
+              (String.concat "; " labels0) (String.concat "; " new_labels);
             if force && new_labels <> List.sort_uniq Stdlib.compare labels0 then
               Github.Issue.set_labels ~verbose ?token repo gh_id new_labels
       end
