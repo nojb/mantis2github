@@ -132,20 +132,23 @@ let append_to_log (id, gh_id) =
   close_out oc;
   prerr_endline s
 
-let read_log () =
-  if not (Sys.file_exists "_log") then
+let really_read_log ~name =
+  let log = Hashtbl.create 13 in
+  let ic = open_in name in
+  let rec loop () =
+    match input_line ic with
+    | s -> Scanf.sscanf s "%d %d" (Hashtbl.add log); loop ()
+    | exception End_of_file -> ()
+  in
+  loop ();
+  log
+
+let read_log ?(name = "_log") () =
+  if not (Sys.file_exists name) then
     fun _ -> None
-  else begin
-    let log = Hashtbl.create 13 in
-    let ic = open_in "_log" in
-    let rec loop () =
-      match input_line ic with
-      | s -> Scanf.sscanf s "%d %d" (Hashtbl.add log); loop ()
-      | exception End_of_file -> ()
-    in
-    loop ();
+  else
+    let log = really_read_log ~name in
     Hashtbl.find_opt log
-  end
 
 let existing_number = 2324
 
@@ -357,6 +360,22 @@ let check verbose token repo force =
       end
     ) all_milestones
 
+let relabel verbose token repo =
+  let log = really_read_log ~name:"issue_mapping.txt" in
+  Hashtbl.iter (fun id gh_id ->
+      let issue = Hashtbl.find issues id in
+      let labels =
+        match issue.Mantis.Issue.severity, issue.Mantis.Issue.status with
+        | Mantis.Severity.Feature, _ ->
+            ["feature-wish"]
+        | _, Mantis.Status.New ->
+            []
+        | _ ->
+            ["bug"]
+      in
+      if labels <> [] then Github.Issue.add_labels ~verbose ?token repo gh_id labels
+    ) log
+
 open Cmdliner
 
 let verbose_t =
@@ -395,11 +414,17 @@ let default_cmd =
   Term.(ret (const (`Help (`Pager, None)))),
   Term.info "mantis2github" ~version:"v0.1" ~doc
 
+let relabel_cmd =
+  let doc = "Relabel." in
+  Term.(const relabel $ verbose_t $ token_t $ repo_t),
+  Term.info "relabel" ~doc
+
 let cmds =
   [
     extract_cmd;
     import_cmd;
     check_cmd;
+    relabel_cmd;
   ]
 
 let () =

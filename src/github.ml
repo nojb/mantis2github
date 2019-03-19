@@ -32,11 +32,18 @@ module Api = struct
     | POST
     | GET
     | DELETE
+    | PATCH
 
   let to_string = function
     | GET -> "GET"
     | POST -> "POST"
     | DELETE -> "DELETE"
+    | PATCH -> "PATCH"
+
+  type error =
+    | Gone
+    | Not_Found
+    | Other of int
 
   let last_request = ref 0.
 
@@ -97,9 +104,13 @@ module Api = struct
           let json = match data with None -> json | Some data -> ("data", data) :: json in
           let json = `Assoc json in
           Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
-          Printf.ksprintf failwith "Github API call failed: %s" route
-        end;
-        json
+          begin match code with
+          | 401 -> Error Gone
+          | 404 -> Error Not_Found
+          | _ -> Error (Other code)
+          end
+        end else
+          Ok json
     | _ ->
         Printf.ksprintf failwith "Could not execute command: %S" cmd
 
@@ -110,26 +121,35 @@ module Api = struct
     Printf.ksprintf (curl POST ?verbose ?headers ?data ?token) fmt
 
   let delete ?verbose ?headers ?token fmt =
-    Printf.ksprintf (fun s -> ignore (curl DELETE ?verbose ?headers ?token s)) fmt
+    Printf.ksprintf (curl DELETE ?verbose ?headers ?token) fmt
+
+  let patch ?verbose ?headers ?data ?token fmt =
+    Printf.ksprintf (curl PATCH ?verbose ?headers ?data ?token) fmt
+
+  let extract_ok = function
+    | Ok x -> x
+    | Error _ -> failwith "Github API call failed"
 end
 
 module Labels = struct
   let list ?verbose ?token (owner, repo) =
     let params = ["per_page", "100"] in
     Api.get ?verbose ?token ~params "/repos/%s/%s/labels" owner repo
+    |> Api.extract_ok
     |> J.to_list
     |> List.map (J.member "name")
     |> List.map J.to_string
 
   let create ?verbose ?token (owner, repo) name color =
     let data = `Assoc ["name", `String name; "color", `String (Printf.sprintf "%06x" color)] in
-    Api.post ?verbose ?token ~data "/repos/%s/%s/labels" owner repo |> ignore
+    ignore (Api.extract_ok (Api.post ?verbose ?token ~data "/repos/%s/%s/labels" owner repo))
 end
 
 module Milestones = struct
   let list ?verbose ?token (owner, repo) =
     let params = ["state", "all"] in
     Api.get ?verbose ?token ~params "/repos/%s/%s/milestones" owner repo
+    |> Api.extract_ok
     |> J.to_list
     |> List.map (fun json ->
         let title = J.member "title" json |> J.to_string in
@@ -140,6 +160,7 @@ module Milestones = struct
   let create ?verbose ?token (owner, repo) title =
     let data = `Assoc ["title", `String title; "state", `String "closed"] in
     Api.post ?verbose ?token ~data "/repos/%s/%s/milestones" owner repo
+    |> Api.extract_ok
     |> J.member "number"
     |> J.to_int
 end
@@ -148,6 +169,7 @@ module Assignees = struct
   let list ?verbose ?token (owner, repo) =
     let params = ["per_page", "100"] in
     Api.get ?verbose ?token ~params "/repos/%s/%s/assignees" owner repo
+    |> Api.extract_ok
     |> J.to_list
     |> List.map (J.member "login")
     |> List.map J.to_string
@@ -227,7 +249,10 @@ module Issue = struct
     | Pending
 
   let check_imported ?verbose ?token (owner, repo) id =
-    let json = Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id in
+    let json =
+      Api.get ?verbose ?token "/repos/%s/%s/import/issues/%d" owner repo id
+      |> Api.extract_ok
+    in
     match json |> J.member "status" |> J.to_string with
     | "imported" ->
       let id =
@@ -247,13 +272,53 @@ module Issue = struct
 
   let import ?verbose ?token (owner, repo) issue =
     let data = to_json issue in
-    let json = Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo in
-    json |> J.member "id" |> J.to_int
+    Api.post ?verbose ~data ?token "/repos/%s/%s/import/issues" owner repo
+    |> Api.extract_ok
+    |> J.member "id"
+    |> J.to_int
 
   let exists ?verbose ?token (owner, repo) id =
     match Api.get ?verbose ?token "/repos/%s/%s/issues/%d" owner repo id with
-    | exception _ -> false
-    | _ -> true
+    | Error _ -> false
+    | Ok _ -> true
+
+  let add_labels ?verbose ?token (owner, repo) id labels =
+    let labels_of_json json =
+      json
+      |> J.member "labels"
+      |> J.to_list
+      |> List.map (J.member "name")
+      |> List.map J.to_string
+      |> List.sort_uniq Stdlib.compare
+    in
+    match Api.get ?verbose ?token "/repos/%s/%s/issues/%d" owner repo id with
+    | Ok json ->
+        let repo0 =
+          json
+          |> J.member "repository_url"
+          |> J.to_string
+          |> String.split_on_char '/'
+          |> List.rev
+          |> List.hd
+        in
+        if repo = repo0 then begin
+          let old_labels = labels_of_json json in
+          let new_labels = List.sort_uniq Stdlib.compare (old_labels @ labels) in
+          if old_labels <> new_labels then begin
+            let data = `Assoc ["labels", `List (List.map (fun s -> `String s) new_labels)] in
+            match Api.patch ?verbose ~data ?token "/repos/%s/%s/issues/%d" owner repo id with
+            | Ok json ->
+                let labels = labels_of_json json in
+                if List.sort_uniq Stdlib.compare labels <> new_labels then failwith "Inconsistent response from GitHub, aborting!"
+            | Error _ ->
+                failwith "Unexpected error from GitHub while updating labels"
+          end
+        end else
+          Printf.eprintf "Issue #%d has been moved, can't update labels.\n%!" id
+    | Error Gone ->
+      Printf.eprintf "Issue #%d has been deleted, can't update labels.\n%!" id
+    | Error _ ->
+      failwith "Unexpected error from GitHub"
 end
 
 module Gist = struct
@@ -320,14 +385,14 @@ module Gist = struct
   let create ?verbose ?token gist =
     let is_ascii = List.for_all (fun (_, contents) -> is_ascii contents) gist.files in
     let data = to_json (if is_ascii then gist else dummy gist.description) in
-    let json = Api.post ?verbose ~data ?token "/gists" in
+    let json = Api.post ?verbose ~data ?token "/gists" |> Api.extract_ok in
     let json =
       if is_ascii then
         json
       else begin
         let id = J.member "id" json |> J.to_string in
         clone_and_push ?verbose ?token id gist.files;
-        Api.get ?verbose ?token "/gists/%s" id
+        Api.extract_ok (Api.get ?verbose ?token "/gists/%s" id)
       end
     in
     J.member "files" json |> J.to_assoc |>
@@ -338,7 +403,7 @@ module Gist = struct
       )
 
   let last ?verbose ?token () =
-    let json = Api.get ?verbose ?token "/gists" in
+    let json = Api.extract_ok (Api.get ?verbose ?token "/gists") in
     match J.to_list json with
     | [] -> None
     | x :: _ ->
@@ -347,5 +412,5 @@ module Gist = struct
         Some (description, gist_id)
 
   let delete ?verbose ?token gist_id =
-    Api.delete ?verbose ?token "/gists/%s" gist_id
+    ignore (Api.extract_ok (Api.delete ?verbose ?token "/gists/%s" gist_id))
 end
