@@ -362,8 +362,24 @@ let check verbose token repo force =
 
 let relabel verbose token repo force =
   let log = really_read_log ~name:"issue_mapping.txt" in
-  let log = Hashtbl.fold (fun id gh_id acc -> (id, gh_id) :: acc) log [] in
+  let past_log = read_log () in
+  let log =
+    Hashtbl.fold (fun id gh_id acc ->
+        match past_log id with
+        | None ->
+          (id, gh_id) :: acc
+        | Some gh_id' ->
+          if gh_id = gh_id' then
+            acc
+          else
+            Printf.ksprintf failwith "Inconsistent log, aborting (id=%d,gh_id=%d,gh_id'=%d)\n%!" id gh_id gh_id'
+      ) log []
+  in
   let log = List.sort Stdlib.compare log in
+  begin match log with
+  | (id, gh_id) :: _ -> Printf.eprintf "Restarting from #%d (MPR#%d)\n%!" gh_id id
+  | [] -> ()
+  end;
   List.iter (fun (id, gh_id) ->
       let issue = Hashtbl.find issues id in
       let labels =
@@ -387,7 +403,8 @@ let relabel verbose token repo force =
               (String.concat "; " labels0) (String.concat "; " new_labels);
             if force && new_labels <> List.sort_uniq Stdlib.compare labels0 then
               Github.Issue.set_labels ~verbose ?token repo gh_id new_labels
-      end
+      end;
+      append_to_log (id, gh_id)
     ) log
 
 open Cmdliner

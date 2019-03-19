@@ -105,7 +105,7 @@ module Api = struct
           let json = `Assoc json in
           Printf.eprintf "%a\n%!" (Yojson.Basic.pretty_to_channel ~std:true) json;
           begin match code with
-          | 401 -> Error Gone
+          | 410 -> Error Gone
           | 404 -> Error Not_Found
           | _ -> Error (Other code)
           end
@@ -311,8 +311,10 @@ module Issue = struct
           Error Moved
     | Error Gone ->
         Error Deleted
-    | Error _ ->
-        failwith "Unexpected error from GitHub"
+    | Error Not_Found ->
+        Error Deleted (* CORRECT ? *)
+    | Error (Other n) ->
+        Printf.ksprintf failwith "Unexpected error from GitHub (%d)" n
 
   let set_labels ?verbose ?token (owner, repo) id labels =
     let labels = List.sort_uniq Stdlib.compare labels in
